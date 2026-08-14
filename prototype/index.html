@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChatHub · 安卓客户端原型</title>
+<style>
+  :root {
+    --bg: #f7f7f7; --bg-chat: #ededed; --card: #ffffff;
+    --text: #111111; --text-2: #888888; --text-3: #b2b2b2;
+    --line: #e5e5e5; --line-strong: #d9d9d9;
+    --green: #07c160; --bubble-me: #95ec69; --red: #fa5151;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+         background: #e8e8e8; color: var(--text); min-height: 100vh; display: flex;
+         flex-direction: column; align-items: center; padding: 32px 12px;
+         -webkit-font-smoothing: antialiased; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input { font-family: inherit; font-size: 15px; border: none; outline: none; width: 100%;
+          background: transparent; color: var(--text); }
+  .ic { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6;
+        stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .ic.sm { width: 16px; height: 16px; }
+
+  .caption { text-align: center; margin-bottom: 18px; }
+  .caption .t { font-size: 15px; color: #576b95; font-weight: 500; }
+  .caption .s { font-size: 12px; color: var(--text-2); margin-top: 6px; }
+
+  .phone { width: 390px; height: 824px; background: var(--bg); border-radius: 40px;
+           border: 10px solid #141414; overflow: hidden; position: relative; flex-shrink: 0;
+           box-shadow: 0 24px 60px rgba(0,0,0,.22); }
+  .screen { position: absolute; inset: 0; display: none; flex-direction: column; background: var(--bg); }
+  .screen.active { display: flex; }
+
+  /* 顶栏 */
+  .appbar { height: 52px; padding: 0 12px; display: flex; align-items: center; gap: 4px;
+            flex-shrink: 0; position: relative; }
+  .appbar-title { font-size: 17px; font-weight: 600; flex: 1; padding-left: 6px; }
+  .appbar-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+                   text-align: center; pointer-events: auto; cursor: pointer; }
+  .appbar-center .n1 { font-size: 17px; font-weight: 500; }
+  .appbar-center .n2 { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+  .icon-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+              color: var(--text); border-radius: 6px; }
+  .icon-btn:active { background: rgba(0,0,0,.06); }
+
+  .page-body { flex: 1; overflow-y: auto; }
+  .pad-body { padding-bottom: 84px; }
+
+  /* 全宽分组（微信设置页式） */
+  .group { background: var(--card); }
+  .group + .group { margin-top: 12px; }
+  .sep { position: relative; }
+  .sep::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px;
+                 background: var(--line); }
+  .chat-row.sep::before { left: 72px; }
+  .provider-row.sep::before, .contact-row.sep::before { left: 68px; }
+  .group-label { font-size: 14px; color: var(--text-2); padding: 18px 16px 8px; }
+
+  /* 头像（方角） */
+  .avatar { width: 44px; height: 44px; border-radius: 6px; font-weight: 600; font-size: 16px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .avatar.big { width: 62px; height: 62px; font-size: 24px; border-radius: 8px; }
+  .avatar.c1 { background: #dce8e2; color: #3e6b55; }
+  .avatar.c2 { background: #f3e3d3; color: #a5713d; }
+  .avatar.c3 { background: #dde5ec; color: #4c657f; }
+  .avatar.c4 { background: #e7e0ec; color: #71588a; }
+  .avatar-wrap { position: relative; flex-shrink: 0; }
+  .badge-num { position: absolute; top: -5px; right: -5px; background: var(--red); color: #fff;
+               font-size: 10px; min-width: 17px; height: 17px; border-radius: 9px; display: flex;
+               align-items: center; justify-content: center; padding: 0 5px; font-weight: 500; }
+
+  /* 聊天列表 */
+  .chat-row { background: var(--card); padding: 13px 16px; display: flex; gap: 12px;
+              align-items: center; cursor: pointer; }
+  .chat-row:active { background: #ececec; }
+  .cr-main { flex: 1; min-width: 0; }
+  .cr-top { display: flex; align-items: baseline; gap: 8px; }
+  .cr-name { font-size: 16px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cr-time { font-size: 12px; color: var(--text-3); flex-shrink: 0; }
+  .cr-preview { font-size: 13px; color: var(--text-3); margin-top: 3px; white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+
+  /* 聊天窗口 */
+  .messages { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex;
+              flex-direction: column; gap: 18px; background: var(--bg-chat); }
+  .msg { display: flex; gap: 10px; max-width: 88%; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg .avatar { width: 38px; height: 38px; font-size: 14px; }
+  .bubble { padding: 10px 12px; font-size: 15px; line-height: 1.55; border-radius: 6px;
+            position: relative; word-break: break-word; }
+  .msg.user .bubble { background: var(--bubble-me); color: var(--text); }
+  .msg.assistant .bubble { background: var(--card); color: var(--text); }
+  .msg.user .bubble::after { content: ""; position: absolute; top: 13px; right: -5px;
+            border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+            border-left: 6px solid var(--bubble-me); }
+  .msg.assistant .bubble::before { content: ""; position: absolute; top: 13px; left: -5px;
+            border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+            border-right: 6px solid var(--card); }
+  pre.code { background: #282c34; color: #dcdfe4; padding: 10px 12px; border-radius: 6px;
+             font-size: 12px; overflow-x: auto; margin: 8px 0; line-height: 1.6;
+             font-family: Menlo, Consolas, monospace; position: relative; }
+  .copy-btn { position: absolute; top: 6px; right: 6px; color: #aab0ba; padding: 4px; border-radius: 4px;
+              display: flex; }
+  .copy-btn:active { background: rgba(255,255,255,.1); }
+  .cursor { display: inline-block; width: 7px; height: 15px; background: var(--text);
+            vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .gen-bar { align-self: flex-start; display: flex; align-items: center; gap: 10px;
+             font-size: 12px; color: var(--text-2); padding-left: 48px; }
+  .stop-btn { color: var(--green); font-size: 12px; }
+
+  .input-bar { background: var(--bg-chat); border-top: 1px solid var(--line-strong);
+               padding: 10px 12px 16px; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .input-field { flex: 1; background: var(--card); border-radius: 6px; padding: 9px 12px; }
+  .send-btn { background: var(--green); color: #fff; font-size: 14px; padding: 9px 16px;
+              border-radius: 6px; flex-shrink: 0; }
+  .send-btn:active { background: #06ad56; }
+
+  /* 底部标签栏 */
+  .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: var(--bg);
+            border-top: 1px solid var(--line-strong); display: none; z-index: 4; }
+  .tabbar.show { display: flex; }
+  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+         gap: 2px; font-size: 11px; color: var(--text-2); cursor: pointer; }
+  .tab .ic { width: 25px; height: 25px; }
+  .tab.active { color: var(--green); }
+
+  /* 资料页 */
+  .profile-head { background: var(--card); padding: 22px 16px; display: flex; gap: 14px;
+                  align-items: center; cursor: pointer; }
+  .ph-name { font-size: 18px; font-weight: 600; }
+  .ph-sub { font-size: 13px; color: var(--text-2); margin-top: 5px; }
+  .ph-chevron { margin-left: auto; color: var(--text-3); display: flex; }
+  .green-btn { display: block; width: calc(100% - 32px); margin: 12px 16px 0; padding: 12px;
+               background: var(--green); color: #fff; font-size: 16px; border-radius: 6px;
+               text-align: center; }
+  .green-btn:active { background: #06ad56; }
+  .cell { background: var(--card); padding: 15px 16px; display: flex; align-items: center;
+          font-size: 16px; cursor: pointer; }
+  .cell:active { background: #ececec; }
+  .cell-val { margin-left: auto; color: var(--text-3); font-size: 14px; display: flex;
+              align-items: center; gap: 4px; }
+  .cell-val .ok { color: var(--green); }
+  .cell.danger { color: var(--red); justify-content: center; }
+
+  /* 通讯录 */
+  .contact-row { background: var(--card); padding: 11px 16px; display: flex; gap: 12px;
+                 align-items: center; cursor: pointer; }
+  .contact-row:active { background: #ececec; }
+  .contact-row .avatar { width: 40px; height: 40px; font-size: 15px; }
+  .ct-name { font-size: 16px; }
+  .ct-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .chevron { margin-left: auto; color: var(--text-3); display: flex; }
+
+  /* 设置 */
+  .provider-row { background: var(--card); padding: 14px 16px; display: flex; gap: 12px; }
+  .provider-row .avatar { width: 40px; height: 40px; font-size: 15px; }
+  .p-info { flex: 1; min-width: 0; }
+  .p-name { font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .p-status { font-size: 12px; }
+  .p-status.ok { color: var(--green); }
+  .p-status.off { color: var(--text-3); }
+  .p-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; word-break: break-all; }
+  .p-actions { display: flex; gap: 18px; margin-top: 9px; font-size: 14px; }
+  .p-actions span { color: #576b95; cursor: pointer; }
+  .p-actions .danger { color: var(--red); }
+  .model-row { background: var(--card); padding: 13px 16px; display: flex; align-items: center; gap: 12px; }
+  .m-id { font-size: 15px; }
+  .m-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .switch { width: 44px; height: 26px; border-radius: 13px; background: #e5e5e5;
+            position: relative; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; width: 22px; height: 22px; border-radius: 50%;
+                   background: #fff; top: 2px; left: 2px; transition: left .15s;
+                   box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .switch.on { background: var(--green); }
+  .switch.on::after { left: 20px; }
+
+  /* 添加服务商 */
+  .tpl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 16px; }
+  .tpl-card { background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+              padding: 13px; cursor: pointer; position: relative; }
+  .tpl-card.selected { border-color: var(--green); }
+  .tpl-card.selected::after { content: "✓"; position: absolute; top: -7px; right: -7px;
+                              font-size: 11px; color: #fff; background: var(--green);
+                              width: 18px; height: 18px; border-radius: 50%; display: flex;
+                              align-items: center; justify-content: center; }
+  .tpl-name { font-weight: 600; font-size: 14px; }
+  .tpl-desc { font-size: 12px; color: var(--text-2); margin-top: 4px; line-height: 1.5; }
+  .form-row { padding: 12px 16px; }
+  .form-row label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+  .form-row .field { border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .form-row input { font-size: 15px; }
+  .test-row { display: flex; align-items: center; gap: 12px; padding: 4px 16px 12px; }
+  .test-btn { background: var(--card); border: 1px solid var(--green); color: var(--green);
+              padding: 8px 18px; font-size: 14px; border-radius: 6px; }
+  .test-ok { color: var(--green); font-size: 13px; display: none; align-items: center; gap: 4px; }
+  .check-row { display: flex; flex-direction: column; gap: 10px; }
+  .check-row label { font-size: 15px; color: var(--text); display: flex; gap: 8px; align-items: center; }
+  .check-row input { width: auto; accent-color: var(--green); }
+  .save-btn { display: block; width: calc(100% - 32px); margin: 14px 16px 0; padding: 12px;
+              background: var(--green); color: #fff; font-size: 16px; border-radius: 6px;
+              text-align: center; }
+</style>
+</head>
+<body>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+</svg>
+
+<div class="caption">
+  <div class="t">ChatHub · 安卓客户端原型</div>
+  <div class="s">微信式交互 · 每个模型是一位联系人 · 点击界面任意入口体验</div>
+</div>
+
+<div class="phone">
+
+  <!-- ========== 聊天页（首页） ========== -->
+  <div class="screen active" id="screen-chatlist">
+    <div class="appbar" style="background:var(--card)">
+      <div class="appbar-title">ChatHub</div>
+      <button class="icon-btn"><svg class="ic"><use href="#i-search"/></svg></button>
+      <button class="icon-btn"><svg class="ic"><use href="#i-plus"/></svg></button>
+    </div>
+    <div class="page-body">
+      <div class="chat-row" onclick="go('chat')">
+        <div class="avatar-wrap"><div class="avatar c1">D</div></div>
+        <div class="cr-main">
+          <div class="cr-top"><span class="cr-name">DeepSeek 对话</span><span class="cr-time">10:24</span></div>
+          <div class="cr-preview">递归版本把搜索区间作为参数传递，逻辑更直观…</div>
+        </div>
+      </div>
+      <div class="chat-row sep" onclick="go('chat')">
+        <div class="avatar-wrap"><div class="avatar c2">豆</div><span class="badge-num">2</span></div>
+        <div class="cr-main">
+          <div class="cr-top"><span class="cr-name">豆包 Pro</span><span class="cr-time">昨天</span></div>
+          <div class="cr-preview">推荐两条路线：Day 1 大理古城 + 洱海日落…</div>
+        </div>
+      </div>
+      <div class="chat-row sep" onclick="go('chat')">
+        <div class="avatar-wrap"><div class="avatar c3">G</div></div>
+        <div class="cr-main">
+          <div class="cr-top"><span class="cr-name">GPT-4o mini</span><span class="cr-time">昨天</span></div>
+          <div class="cr-preview">好的，这是本周周报模板，已按 OKR 结构整理…</div>
+        </div>
+      </div>
+      <div class="chat-row sep" onclick="go('chat')">
+        <div class="avatar-wrap"><div class="avatar c4">K</div></div>
+        <div class="cr-main">
+          <div class="cr-top"><span class="cr-name">Kimi 长文档</span><span class="cr-time">周一</span></div>
+          <div class="cr-preview">全文 128 页，核心结论有三点：…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 聊天窗口 ========== -->
+  <div class="screen" id="screen-chat" style="background:var(--bg-chat)">
+    <div class="appbar" style="background:var(--bg-chat)">
+      <button class="icon-btn" onclick="go('chatlist')"><svg class="ic"><use href="#i-back"/></svg></button>
+      <div class="appbar-center" onclick="go('contactinfo')">
+        <div class="n1">DeepSeek 对话</div>
+        <div class="n2">对方正在输入…</div>
+      </div>
+      <button class="icon-btn" onclick="go('contactinfo')"><svg class="ic"><use href="#i-dots"/></svg></button>
+    </div>
+    <div class="messages" id="messages">
+      <div class="msg user">
+        <div class="avatar c1">我</div>
+        <div class="bubble">用 Python 写一个二分查找，注释解释每一步</div>
+      </div>
+      <div class="msg assistant">
+        <div class="avatar c1">D</div>
+        <div class="bubble">
+          好的，下面是带注释的二分查找实现：
+          <pre class="code"><button class="copy-btn"><svg class="ic sm"><use href="#i-copy"/></svg></button>def binary_search(arr, target):
+    left, right = 0, len(arr) - 1
+    while left &lt;= right:
+        mid = (left + right) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] &lt; target:
+            left = mid + 1
+        else:
+            right = mid - 1
+    return -1</pre>
+          时间复杂度 O(log n)，要求输入数组有序。
+        </div>
+      </div>
+      <div class="msg user">
+        <div class="avatar c1">我</div>
+        <div class="bubble">帮我改成递归版本</div>
+      </div>
+      <div class="msg assistant">
+        <div class="avatar c1">D</div>
+        <div class="bubble">递归版本把搜索区间作为参数传递，逻辑更直观：<span class="cursor"></span></div>
+      </div>
+      <div class="gen-bar">正在生成 <button class="stop-btn">■ 停止</button></div>
+    </div>
+    <div class="input-bar">
+      <div class="input-field">
+        <input id="chat-input" placeholder="输入消息…" onkeydown="if(event.key==='Enter')fakeSend()">
+      </div>
+      <button class="send-btn" onclick="fakeSend()">发送</button>
+    </div>
+  </div>
+
+  <!-- ========== 联系人资料 ========== -->
+  <div class="screen" id="screen-contactinfo">
+    <div class="appbar">
+      <button class="icon-btn" onclick="go('chat')"><svg class="ic"><use href="#i-back"/></svg></button>
+      <div class="appbar-title" style="text-align:center">联系人资料</div>
+      <button class="icon-btn" style="visibility:hidden"><svg class="ic"><use href="#i-dots"/></svg></button>
+    </div>
+    <div class="page-body pad-body">
+      <div class="profile-head" onclick="go('chat')">
+        <div class="avatar big c1">D</div>
+        <div>
+          <div class="ph-name">DeepSeek 对话</div>
+          <div class="ph-sub">模型 ID：deepseek-chat · 64K 上下文</div>
+        </div>
+        <span class="ph-chevron"><svg class="ic"><use href="#i-chevron"/></svg></span>
+      </div>
+      <button class="green-btn" onclick="go('chat')">发消息</button>
+      <div class="group" style="margin-top:12px">
+        <div class="cell">服务商<span class="cell-val">DeepSeek</span></div>
+        <div class="cell sep">人设（system prompt）<span class="cell-val">未设置 <svg class="ic sm"><use href="#i-chevron"/></svg></span></div>
+        <div class="cell sep">上下文策略<span class="cell-val">全量携带 <svg class="ic sm"><use href="#i-chevron"/></svg></span></div>
+      </div>
+      <div class="group" style="margin-top:12px">
+        <div class="cell danger">清空聊天记录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 通讯录 ========== -->
+  <div class="screen" id="screen-contacts" style="background:var(--card)">
+    <div class="appbar" style="background:var(--card)">
+      <div class="appbar-title">联系人</div>
+      <button class="icon-btn"><svg class="ic"><use href="#i-search"/></svg></button>
+    </div>
+    <div class="page-body">
+      <div class="group-label">DeepSeek</div>
+      <div class="contact-row" onclick="go('chat')">
+        <div class="avatar c1">D</div>
+        <div><div class="ct-name">DeepSeek 对话</div><div class="ct-sub">deepseek-chat · 64K</div></div>
+        <span class="chevron"><svg class="ic sm"><use href="#i-chevron"/></svg></span>
+      </div>
+      <div class="contact-row sep" onclick="go('chat')">
+        <div class="avatar c1">R</div>
+        <div><div class="ct-name">DeepSeek 推理</div><div class="ct-sub">deepseek-reasoner · 64K</div></div>
+        <span class="chevron"><svg class="ic sm"><use href="#i-chevron"/></svg></span>
+      </div>
+      <div class="group-label">豆包 · 火山方舟</div>
+      <div class="contact-row" onclick="go('chat')">
+        <div class="avatar c2">豆</div>
+        <div><div class="ct-name">豆包 Pro</div><div class="ct-sub">doubao-pro-32k · 32K</div></div>
+        <span class="chevron"><svg class="ic sm"><use href="#i-chevron"/></svg></span>
+      </div>
+      <div class="group-label">OpenAI</div>
+      <div class="contact-row" onclick="go('chat')">
+        <div class="avatar c3">G</div>
+        <div><div class="ct-name">GPT-4o mini</div><div class="ct-sub">gpt-4o-mini · 128K</div></div>
+        <span class="chevron"><svg class="ic sm"><use href="#i-chevron"/></svg></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 设置 ========== -->
+  <div class="screen" id="screen-settings">
+    <div class="appbar"><div class="appbar-title">设置</div></div>
+    <div class="page-body pad-body">
+      <div class="group">
+        <div class="cell">后端地址
+          <span class="cell-val">chat150.xiaoxi.online <svg class="ic sm ok"><use href="#i-check"/></svg></span>
+        </div>
+      </div>
+      <div class="group-label">服务商</div>
+      <div class="group">
+        <div class="provider-row">
+          <div class="avatar c1">D</div>
+          <div class="p-info">
+            <div class="p-name">DeepSeek <span class="p-status ok">已连接</span></div>
+            <div class="p-meta">api.deepseek.com · sk-12ab****ef56 · 2 位联系人</div>
+            <div class="p-actions"><span>测试</span><span>编辑</span><span class="danger">删除</span></div>
+          </div>
+        </div>
+        <div class="provider-row sep">
+          <div class="avatar c2">豆</div>
+          <div class="p-info">
+            <div class="p-name">豆包（火山方舟） <span class="p-status ok">已连接</span></div>
+            <div class="p-meta">ark.cn-beijing.volces.com · sk-9f3c****88d1 · 1 位联系人</div>
+            <div class="p-actions"><span>测试</span><span>编辑</span><span class="danger">删除</span></div>
+          </div>
+        </div>
+        <div class="provider-row sep">
+          <div class="avatar c3">O</div>
+          <div class="p-info">
+            <div class="p-name">OpenAI <span class="p-status off">未配置</span></div>
+            <div class="p-meta">api.openai.com · 填入 API Key 后即可使用</div>
+            <div class="p-actions"><span onclick="go('addprovider')">配置</span></div>
+          </div>
+        </div>
+      </div>
+      <button class="green-btn" style="width:calc(100% - 32px);margin:12px 16px 0" onclick="go('addprovider')">＋ 添加服务商</button>
+      <div class="group-label">联系人管理 · DeepSeek</div>
+      <div class="group">
+        <div class="model-row">
+          <div style="flex:1"><div class="m-id">DeepSeek 对话</div><div class="m-sub">deepseek-chat · 显示在通讯录</div></div>
+          <div class="switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="model-row sep">
+          <div style="flex:1"><div class="m-id">DeepSeek 推理</div><div class="m-sub">deepseek-reasoner · 显示在通讯录</div></div>
+          <div class="switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="model-row sep">
+          <input placeholder="添加模型为联系人（如豆包接入点 ep-xxx）" style="font-size:14px">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 添加服务商 ========== -->
+  <div class="screen" id="screen-addprovider">
+    <div class="appbar">
+      <button class="icon-btn" onclick="go('settings')"><svg class="ic"><use href="#i-back"/></svg></button>
+      <div class="appbar-title" style="text-align:center">添加服务商</div>
+      <button class="icon-btn" style="visibility:hidden"><svg class="ic"><use href="#i-dots"/></svg></button>
+    </div>
+    <div class="page-body pad-body">
+      <div class="group-label" style="padding-top:8px">选择模板</div>
+      <div class="tpl-grid" id="tpl-grid">
+        <div class="tpl-card selected"><div class="tpl-name">DeepSeek</div><div class="tpl-desc">深度求索 · 已预填端点</div></div>
+        <div class="tpl-card"><div class="tpl-name">豆包 · 火山方舟</div><div class="tpl-desc">字节豆包 · 方舟接入</div></div>
+        <div class="tpl-card"><div class="tpl-name">OpenAI</div><div class="tpl-desc">GPT 系列模型</div></div>
+        <div class="tpl-card"><div class="tpl-name">Moonshot</div><div class="tpl-desc">Kimi 长上下文</div></div>
+        <div class="tpl-card"><div class="tpl-name">智谱 GLM</div><div class="tpl-desc">GLM 系列模型</div></div>
+        <div class="tpl-card"><div class="tpl-name">通义千问</div><div class="tpl-desc">阿里 Qwen 系列</div></div>
+        <div class="tpl-card"><div class="tpl-name">Ollama</div><div class="tpl-desc">本地模型 · 无需 Key</div></div>
+        <div class="tpl-card"><div class="tpl-name">自定义</div><div class="tpl-desc">OpenAI 兼容端点</div></div>
+      </div>
+      <div class="group-label">填写配置</div>
+      <div class="group">
+        <div class="form-row"><label>名称</label><div class="field"><input value="DeepSeek"></div></div>
+        <div class="form-row sep"><label>API 端点（baseUrl）</label><div class="field"><input value="https://api.deepseek.com"></div></div>
+        <div class="form-row sep"><label>API Key</label><div class="field"><input type="password" value="sk-12abxxxxxxxxef56"></div></div>
+        <div class="test-row sep">
+          <button class="test-btn" onclick="document.getElementById('test-ok').style.display='inline-flex'">测试连接</button>
+          <span class="test-ok" id="test-ok"><svg class="ic sm"><use href="#i-check"/></svg>连接成功 · 0.8s</span>
+        </div>
+        <div class="form-row sep">
+          <label>添加为联系人的模型（可后续增删）</label>
+          <div class="check-row">
+            <label><input type="checkbox" checked> deepseek-chat → “DeepSeek 对话”</label>
+            <label><input type="checkbox" checked> deepseek-reasoner → “DeepSeek 推理”</label>
+          </div>
+        </div>
+      </div>
+      <button class="save-btn" onclick="go('settings')">保存服务商</button>
+    </div>
+  </div>
+
+  <!-- 底部标签栏 -->
+  <div class="tabbar show" id="tabbar">
+    <div class="tab active" id="tab-chatlist" onclick="go('chatlist')"><svg class="ic"><use href="#i-chat"/></svg>聊天</div>
+    <div class="tab" id="tab-contacts" onclick="go('contacts')"><svg class="ic"><use href="#i-users"/></svg>联系人</div>
+    <div class="tab" id="tab-settings" onclick="go('settings')"><svg class="ic"><use href="#i-sliders"/></svg>设置</div>
+  </div>
+
+</div>
+
+<script>
+  var TAB_SCREENS = { chatlist: true, contacts: true, settings: true };
+  function go(name) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+    document.getElementById('screen-' + name).classList.add('active');
+    document.getElementById('tabbar').classList.toggle('show', !!TAB_SCREENS[name]);
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+    var tab = document.getElementById('tab-' + name);
+    if (tab) tab.classList.add('active');
+  }
+  document.querySelectorAll('#tpl-grid .tpl-card').forEach(function (card) {
+    card.addEventListener('click', function () {
+      document.querySelectorAll('#tpl-grid .tpl-card').forEach(function (c) { c.classList.remove('selected'); });
+      card.classList.add('selected');
+    });
+  });
+  function fakeSend() {
+    var input = document.getElementById('chat-input');
+    var text = input.value.trim();
+    if (!text) return;
+    var box = document.getElementById('messages');
+    box.insertAdjacentHTML('beforeend',
+      '<div class="msg user"><div class="avatar c1">我</div><div class="bubble"></div></div>');
+    box.lastElementChild.querySelector('.bubble').textContent = text;
+    input.value = '';
+    box.scrollTop = box.scrollHeight;
+    setTimeout(function () {
+      box.insertAdjacentHTML('beforeend',
+        '<div class="msg assistant"><div class="avatar c1">D</div>' +
+        '<div class="bubble">（原型演示）这里是模拟的 AI 回复，正式版为真实流式输出。</div></div>');
+      box.scrollTop = box.scrollHeight;
+    }, 400);
+  }
+</script>
+</body>
+</html>

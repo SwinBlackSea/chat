@@ -1,0 +1,14 @@
+[Unit]
+Description=ChatHub API
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/codex/project/chat/backend
+Environment=CHAT_DB_PATH=/home/ubuntu/codex/project/chat/data/chat.db
+ExecStart=/home/ubuntu/codex/project/chat/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

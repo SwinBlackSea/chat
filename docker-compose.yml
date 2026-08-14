@@ -1,0 +1,13 @@
+# ChatHub 一键部署：docker compose up -d --build
+# 数据与 API Key 仅存于宿主机 ./data（SQLite），容器销毁不丢数据。
+services:
+  backend:
+    build: ./backend
+    container_name: chathub
+    ports:
+      - "8000:8000"
+    environment:
+      - CHAT_DB_PATH=/data/chat.db
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+data/
+*.db
+.env
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+_test_ws.txt
