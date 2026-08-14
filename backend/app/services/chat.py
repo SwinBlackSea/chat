@@ -12,12 +12,20 @@ from ..models import Conversation, Message, Model, Provider, utcnow
 from ..providers import (
     ChatRequest,
     Done,
+    DshwebAdapter,
     OpenAICompatAdapter,
     ProviderError,
     TokenDelta,
 )
+from ..providers.templates import TEMPLATE_BY_KIND
 
 logger = logging.getLogger(__name__)
+
+
+def is_agent_provider(kind: str) -> bool:
+    """agent 类服务商（Hermes / dshweb）：多步工具调用耗时长，需要放宽超时。"""
+    template = TEMPLATE_BY_KIND.get(kind)
+    return bool(template and template.agent)
 
 
 @dataclass
@@ -95,19 +103,30 @@ async def prepare_chat(
     conv.updated_at = utcnow()
     await session.commit()
 
+    if is_agent_provider(provider.kind):
+        timeout_first_token = settings.timeout_agent_first_token
+        timeout_total = settings.timeout_agent_total
+    else:
+        timeout_first_token = settings.timeout_first_token
+        timeout_total = settings.timeout_total
+
     request = ChatRequest(
         base_url=provider.base_url,
         api_key=provider.api_key,
         model=model.model_id,
         messages=messages,
-        timeout_first_token=settings.timeout_first_token,
-        timeout_total=settings.timeout_total,
+        timeout_first_token=timeout_first_token,
+        timeout_total=timeout_total,
     )
     return PreparedChat(conversation=conv, model=model, provider=provider, request=request)
 
 
 async def stream_chat(session: AsyncSession, prepared: PreparedChat):
-    adapter = OpenAICompatAdapter()
+    if prepared.provider.kind == "dshweb":
+        adapter = DshwebAdapter()
+    else:
+        # Hermes 及其余 OpenAI 兼容服务商共用同一适配器（超时由 ChatRequest 携带）
+        adapter = OpenAICompatAdapter()
     parts: list[str] = []
     usage: dict | None = None
     error: ProviderError | None = None

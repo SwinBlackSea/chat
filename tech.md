@@ -11,9 +11,10 @@
    ├── REST API：providers / models / conversations / messages
    ├── Chat 服务：组装上下文 → 调适配器 → 流式转发 → 落库
    └── Provider 适配层（统一接口）
-        ├── OpenAI 兼容客户端（主干，覆盖所有服务商）
-        └── 预留：非兼容协议适配器
-上游：DeepSeek / 火山方舟(豆包) / OpenAI / Moonshot / 智谱 / 通义 / Ollama ...
+        ├── OpenAI 兼容客户端（主干，覆盖所有 OpenAI 兼容服务商，含 Hermes）
+        └── dshweb RPC 适配器（session.prompt + 轮询，非 OpenAI 兼容）
+上游：DeepSeek / 火山方舟(豆包) / OpenAI / Moonshot / 智谱 / 通义 / Ollama /
+     Hermes（agent） / dshweb（agent）...
 存储：SQLite（WAL 模式），文件位于 data/chat.db
 ```
 
@@ -22,8 +23,12 @@
 - DeepSeek、火山方舟、Moonshot、智谱、通义、Ollama 均提供 OpenAI 兼容的
   `/chat/completions` 接口，因此适配层只实现**一个** OpenAI 兼容客户端作为主干，
   服务商差异用"模板"（预填 baseUrl + 默认模型清单）表达。
+- agent 类服务商（Hermes / dshweb）模板标记 `agent=True`：聊天链路放宽超时；
+  Hermes 复用 OpenAI 兼容客户端，dshweb 走独立 RPC 适配器（每次请求新建会话，
+  prompt 完整上下文 → 轮询 running=false → 取最后一条 assistant 回复）。
 - 聊天链路为 SSE 透传：安卓端 POST → 后端用 httpx 流式请求上游 → 逐 chunk
-  解析并 yield → 安卓端逐行解析 SSE。后端不缓冲全文。
+  解析并 yield → 安卓端逐行解析 SSE。后端不缓冲全文（dshweb 无流式，
+  最终回复按小块 yield 模拟打字机）。
 - 模型即联系人：一个模型（联系人）在 MVP 中对应唯一一条会话线程
   （conversations.model_id UNIQUE），上下文互不串扰。
 
@@ -57,8 +62,9 @@ chat/
 │   │   │   └── chat.py          # 上下文组装、消息落库
 │   │   └── providers/
 │   │       ├── base.py          # 适配器接口 + 事件类型 + 错误码
-│   │       ├── openai_compat.py # OpenAI 兼容客户端（主干实现）
-│   │       └── templates.py     # 内置服务商模板
+│   │       ├── openai_compat.py # OpenAI 兼容客户端（主干实现，含 Hermes）
+│   │       ├── dshweb_adapter.py # dshweb RPC 适配器（session.prompt + 轮询）
+│   │       └── templates.py     # 内置服务商模板（含 agent 标记）
 │   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -168,17 +174,23 @@ openai_compat.py：httpx AsyncClient 以流式 POST `{base_url}/chat/completions
 | zhipu | 智谱 GLM | https://open.bigmodel.cn/api/paas/v4 | glm 系列 |
 | qwen | 通义千问 | https://dashscope.aliyuncs.com/compatible-mode/v1 | qwen 系列 |
 | ollama | Ollama(本地) | http://localhost:11434/v1 | 模型清单留空由用户添加 |
+| hermes | Hermes | 用户填写 | agent 类：自托管 OpenAI 兼容 gateway（Bearer + SSE），走 openai_compat 适配器 |
+| dshweb | dshweb（DeepSeek Harness） | 用户填写 | agent 类：自托管 RPC（session.prompt + 轮询），走 dshweb_adapter |
 | custom | 自定义 | 用户填写 | 任意 OpenAI 兼容端点 |
 
 模板只是快捷方式：默认模型清单用户可自由增删改，不是硬约束。
 上游模型迭代快，清单过时不影响可用性（手动加联系人即可）。
 
+agent 类模板（hermes / dshweb，`agent=True`）：模型清单留空由用户添加；
+聊天链路按 agent 超时策略执行（见 §7），连接测试走对应适配器的最小请求。
+
 ## 7. 流式与错误处理（对齐 AGENTS.md 三原则）
 
 - 正常一溜到底：chunk 到达即转发，后端不缓冲全文；落库失败不阻断聊天流。
 - 异常快速抛错：
-  - 超时：连接测试 10s；聊天首 token 60s、整体 300s（可配置）。
-    安卓端 OkHttp 读超时与后端对齐。
+  - 超时：连接测试 10s；普通聊天首 token 60s、整体 300s；agent 类服务商
+    （hermes / dshweb，多步工具调用耗时长）首 token 300s、整体 3600s，均可用环境变量覆盖。
+    安卓端 OkHttp 读超时与后端对齐（agent 类放宽至 30 分钟级）。
   - 上游 4xx/5xx：解析响应体提取可读信息 → yield error 事件 → 客户端明确提示。
   - 统一错误码：`bad_key`(401) / `insufficient_balance` / `rate_limit` /
     `model_not_found` / `upstream_error` / `network_error` / `timeout`。
@@ -231,7 +243,8 @@ App 内填写后端地址（开发机局域网 IP:8000 或线上域名）。
 产物 `app/build/outputs/apk/debug/app-debug.apk`；release 签名与分发放 P1。
 
 配置项（环境变量）：`CHAT_DB_PATH`（默认 data/chat.db）、`CHAT_TIMEOUT_FIRST_TOKEN`、
-`CHAT_TIMEOUT_TOTAL`。不使用 .env 入库。
+`CHAT_TIMEOUT_TOTAL`、`CHAT_TIMEOUT_AGENT_FIRST_TOKEN`（默认 300）、
+`CHAT_TIMEOUT_AGENT_TOTAL`（默认 3600）。不使用 .env 入库。
 
 ## 11. 里程碑
 

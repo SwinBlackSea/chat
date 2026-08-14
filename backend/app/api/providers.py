@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from ..db import get_session
 from ..models import Conversation, Model, Provider
+from ..providers.dshweb_adapter import test_dshweb_connection
 from ..providers.openai_compat import test_connection
 from ..providers.templates import TEMPLATE_BY_KIND, TEMPLATES
 from ..schemas import (
@@ -182,7 +183,11 @@ async def test_provider(
     model = (body.model if body else None) or next(
         (m.model_id for m in provider.models if m.is_enabled), None
     )
-    ok, message = await test_connection(provider.base_url, provider.api_key, model)
+    if provider.kind == "dshweb":
+        ok, message = await test_dshweb_connection(provider.base_url, provider.api_key)
+    else:
+        # Hermes 及其他 OpenAI 兼容服务商：最小 chat/completions 或 /models 请求
+        ok, message = await test_connection(provider.base_url, provider.api_key, model)
     return {"ok": ok, "message": message, "model": model}
 
 

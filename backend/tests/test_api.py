@@ -212,3 +212,106 @@ async def test_chat_regenerate_mismatch_rejected(client):
         json={"conversation_id": conv2["id"], "content": "hi", "regenerate": True},
     )
     assert resp.status_code == 409
+
+
+DSHWEB = {
+    "kind": "dshweb",
+    "name": "我的 dshweb",
+    "base_url": "http://dsh.test",
+    "api_key": "",
+}
+DSH = "http://dsh.test"
+
+
+def dsh_envelope(value: dict):
+    """构造带 rpcId 回显的响应 handler（respx side_effect）。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        rpc_id = (
+            request.content and __import__("json").loads(request.content).get("rpcId")
+        ) or "echo"
+        return httpx.Response(
+            200,
+            json={
+                "type": "server-response",
+                "rpcId": rpc_id,
+                "result": {"ok": True, "value": value},
+            },
+        )
+
+    return handler
+
+
+async def seed_dshweb(client) -> dict:
+    resp = await client.post("/api/providers", json=DSHWEB)
+    assert resp.status_code == 201
+    return resp.json()
+
+
+async def test_dshweb_provider_create_and_test(client):
+    provider = await seed_dshweb(client)
+    assert provider["kind"] == "dshweb"
+    assert provider["model_count"] == 0  # 模板无默认模型
+
+    async with respx.mock:
+        respx.route(host="test").pass_through()
+        respx.post(f"{DSH}/api/session.list").mock(side_effect=dsh_envelope({"items": []}))
+        resp = await client.post(f"/api/providers/{provider['id']}/test", json={})
+    assert resp.json()["ok"] is True
+
+    async with respx.mock:
+        respx.route(host="test").pass_through()
+        respx.post(f"{DSH}/api/session.list").mock(return_value=httpx.Response(401, json={}))
+        resp = await client.post(f"/api/providers/{provider['id']}/test", json={})
+    assert resp.json()["ok"] is False
+
+
+async def test_dshweb_chat_full_cycle(client):
+    provider = await seed_dshweb(client)
+    model = (
+        await client.post(
+            f"/api/providers/{provider['id']}/models",
+            json={"model_id": "agent", "display_name": "我的 Agent"},
+        )
+    ).json()
+    conv = (await client.post("/api/conversations", json={"model_id": model["id"]})).json()
+
+    async with respx.mock:
+        respx.route(host="test").pass_through()
+        respx.post(f"{DSH}/api/session.create").mock(side_effect=dsh_envelope({"sessionId": "s-1"}))
+        respx.post(f"{DSH}/api/session.prompt").mock(side_effect=dsh_envelope({"accepted": True}))
+        respx.post(f"{DSH}/api/session.list").mock(
+            side_effect=dsh_envelope({"items": [{"sessionId": "s-1", "running": False}]})
+        )
+        respx.post(f"{DSH}/api/session.history").mock(
+            side_effect=dsh_envelope(
+                {
+                    "events": [
+                        {
+                            "event": {
+                                "type": "assistant/message",
+                                "seq": 2,
+                                "time": 1,
+                                "data": {
+                                    "message": {"content": [{"type": "text", "text": "agent 回复"}]}
+                                },
+                            },
+                            "view": {},
+                        }
+                    ],
+                    "hasMore": False,
+                }
+            )
+        )
+        resp = await client.post(
+            "/api/chat", json={"conversation_id": conv["id"], "content": "帮我看下"}
+        )
+
+    assert resp.status_code == 200
+    assert "event: token" in resp.text
+    assert "agent 回复" in resp.text
+    assert "event: done" in resp.text
+
+    messages = (await client.get(f"/api/conversations/{conv['id']}/messages")).json()
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[1]["content"] == "agent 回复"

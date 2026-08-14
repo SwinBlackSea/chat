@@ -15,6 +15,8 @@ class ProviderTemplate:
     base_url: str
     note: str = ""
     default_models: tuple[DefaultModel, ...] = ()
+    # agent 类服务商（Hermes / dshweb）：多步工具调用耗时长，聊天链路据此放宽超时
+    agent: bool = False
 
 
 TEMPLATES: list[ProviderTemplate] = [
@@ -75,6 +77,20 @@ TEMPLATES: list[ProviderTemplate] = [
         ),
     ),
     ProviderTemplate("ollama", "Ollama（本地）", "http://localhost:11434/v1", "本地模型，无需 Key"),
+    ProviderTemplate(
+        "hermes",
+        "Hermes",
+        "",
+        "自托管 OpenAI 兼容 agent（Hermes gateway API Server，Bearer 认证），需填实例地址",
+        agent=True,
+    ),
+    ProviderTemplate(
+        "dshweb",
+        "dshweb（DeepSeek Harness）",
+        "",
+        "自托管 RPC agent（DeepSeek Harness，session.prompt + 轮询），需填实例地址",
+        agent=True,
+    ),
     ProviderTemplate("custom", "自定义", "", "任意 OpenAI 兼容端点"),
 ]
 TEMPLATE_BY_KIND: dict[str, ProviderTemplate] = {t.kind: t for t in TEMPLATES}
