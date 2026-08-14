@@ -275,7 +275,11 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             val isLastAssistant = msg.role == "assistant" &&
                                 index == messages.indexOfLast { it.role == "assistant" }
                             if (isLastAssistant && lastUser != null && !streaming) {
-                                TextButton(onClick = { send(true, lastUser.content) }) {
+                                TextButton(
+                                    onClick = {
+                                        send(regenerate = true, regenerateContent = lastUser.content)
+                                    },
+                                ) {
                                     Text("重新生成", color = WxText2, fontSize = 12.sp)
                                 }
                             }
