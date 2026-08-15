@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ChatGenerationTracker
+import online.xiaoxi.chathub.data.UiCache
 import online.xiaoxi.chathub.data.WsEvent
 import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.theme.WxLine
@@ -66,9 +67,13 @@ fun ChatListScreen(
     var loaded by remember { mutableStateOf(false) }
 
     fun load() {
+        // 先显示缓存（导航重建时瞬时渲染），后台刷新
+        UiCache.conversations?.let { items = it; loaded = true }
         scope.launch {
             try {
-                items = api.conversations()
+                val list = api.conversations()
+                UiCache.conversations = list
+                items = list
                 error = null
             } catch (e: Exception) {
                 error = "加载失败：${e.message}"

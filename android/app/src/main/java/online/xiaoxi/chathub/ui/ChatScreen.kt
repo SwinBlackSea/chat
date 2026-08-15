@@ -53,6 +53,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,9 +100,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     val isHuman = conv?.isHuman == true
 
     suspend fun reload() {
-        conv = api.conversations().firstOrNull { it.id == conversationId }
-        messages = api.messages(conversationId).map {
-            UiMessage(it.id.toString(), it.role, it.content, it.error, it.senderUserId)
+        // 会话信息（单会话端点）+ 消息并行拉取，减半 Tailscale 慢链路的等待
+        coroutineScope {
+            val convDeferred = async { api.conversation(conversationId) }
+            val msgDeferred = async { api.messages(conversationId) }
+            conv = convDeferred.await()
+            messages = msgDeferred.await().map {
+                UiMessage(it.id.toString(), it.role, it.content, it.error, it.senderUserId)
+            }
         }
         screenError = null
     }

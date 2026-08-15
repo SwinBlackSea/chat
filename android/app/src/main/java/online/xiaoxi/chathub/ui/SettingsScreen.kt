@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.SettingsStore
+import online.xiaoxi.chathub.data.UiCache
 import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.data.normalizeServerUrl
 import online.xiaoxi.chathub.theme.WxGreen
@@ -70,9 +71,12 @@ fun SettingsScreen(
     val storeDisplayName by settingsStore.displayName.collectAsState(initial = "")
 
     fun load() {
+        // 先显示缓存（导航重建时瞬时渲染），后台刷新
+        UiCache.providers?.let { providerCount = it.size; enabledCount = it.count { p -> p.isEnabled } }
         scope.launch {
             try {
                 val list = api.providers()
+                UiCache.providers = list
                 providerCount = list.size
                 enabledCount = list.count { it.isEnabled }
             } catch (e: Exception) {

@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ModelDto
+import online.xiaoxi.chathub.data.UiCache
 import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
@@ -53,13 +54,18 @@ fun ContactsScreen(
     var loaded by remember { mutableStateOf(false) }
 
     fun load() {
+        // 先显示缓存（导航重建时瞬时渲染），后台刷新
+        UiCache.enabledModels?.let { groups = it.groupBy { m -> m.providerName.ifEmpty { "其他" } }.toList() }
+        UiCache.conversations?.let { humans = it.filter { c -> c.isHuman }; loaded = true }
         scope.launch {
             try {
                 // 人：我参与的 human 会话（对方即联系人）
                 val convs = api.conversations()
+                UiCache.conversations = convs
                 humans = convs.filter { it.isHuman }
                 // 模型：按服务商分组
                 val models = api.enabledModels()
+                UiCache.enabledModels = models
                 groups = models.groupBy { it.providerName.ifEmpty { "其他" } }.toList()
                 error = null
             } catch (e: Exception) {

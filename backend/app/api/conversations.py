@@ -175,6 +175,31 @@ async def create_conversation(
     return conversation_out(conv, None)
 
 
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(
+    conversation_id: int,
+    session: AsyncSession = Depends(get_session),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """单个会话信息（聊天窗口进入时用，避免拉全量列表）。"""
+    me = await get_me(session, x_user_id)
+    conv = (
+        await session.execute(
+            select(Conversation)
+            .options(
+                selectinload(Conversation.model).selectinload(Model.provider),
+                selectinload(Conversation.peer_a),
+                selectinload(Conversation.peer_b),
+            )
+            .where(Conversation.id == conversation_id)
+        )
+    ).scalar_one_or_none()
+    if conv is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    last = await _last_messages(session, [conv.id])
+    return conversation_out(conv, last.get(conv.id), me.user_id if me else None)
+
+
 @router.get("/conversations/{conversation_id}/messages")
 async def list_messages(conversation_id: int, session: AsyncSession = Depends(get_session)):
     conv = await session.get(Conversation, conversation_id)
