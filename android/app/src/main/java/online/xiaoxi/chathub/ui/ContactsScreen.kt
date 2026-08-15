@@ -137,7 +137,7 @@ fun ContactsScreen(
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(conv.contactName, conv.avatarColor, size = 44.dp)
+                        Avatar(conv.contactName, conv.avatarColor, size = 44.dp, imageUrl = conv.avatar)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

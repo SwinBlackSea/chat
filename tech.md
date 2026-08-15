@@ -85,7 +85,9 @@ chat/
 │   │   │   ├── contactinfo/     # 联系人资料 / 人设 / 清空记录
 │   │   │   └── settings/        # 服务商管理 + 添加服务商
 │   │   ├── data/
-│   │   │   ├── ApiClient.kt     # 全部后端 REST 调用收敛于此
+│   │   │   ├── ApiClient.kt     # 全部后端 REST 调用收敛于此（含头像上传）
+│   │   │   ├── WsClient.kt      # WebSocket 单例：重连/心跳/事件分发
+│   │   │   ├── AvatarLoader.kt  # 头像图片加载（OkHttp + 内存 LRU）
 │   │   │   ├── SseParser.kt     # SSE 逐行解析（唯一解析点）
 │   │   │   └── Dto.kt           # 与后端 API 对应的数据结构
 │   │   └── theme/
@@ -104,15 +106,18 @@ chat/
   `display_name`(联系人显示名), `avatar_color`(头像色，可空), `context_length`(可空),
   `is_enabled`(停用即从通讯录隐藏), `sort`
 - users: `id`, `user_id`(自定义唯一标识，如 `zhangsan`, **UNIQUE**), `display_name`,
-  `avatar_color`(可空), `created_at` —— 人人聊天的人联系人（自托管无登录，user_id 即身份）
+  `avatar_color`(可空), `avatar`(头像文件名，存 data/avatars/，可空), `created_at`
+  —— 人人聊天的人联系人（自托管无登录，user_id 即身份）
 - conversations: `id`, `kind`(`bot`/`human`),
   - bot 会话：`model_id`(FK→models, CASCADE, 部分唯一索引)
   - human 会话：`peer_a_id`/`peer_b_id`(FK→users, 会话双方；两人之间唯一，部分唯一索引)
   `system_prompt`(联系人人设，仅 bot), `created_at`, `updated_at`
 - messages: `id`, `conversation_id`(FK→conversations, CASCADE),
   `role`(user/assistant/system), `content`, `model_id`(可空),
-  `sender_user_id`(可空；human 会话的消息发送方), `prompt_tokens`, `completion_tokens`,
+  `sender_user_id`(可空；human 会话的消息发送方，bot 会话为 NULL), `prompt_tokens`, `completion_tokens`,
   `duration_ms`, `error`(可空), `created_at`
+- conversation_reads: `id`, `conversation_id`(FK), `user_id`, `last_read_msg_id`,
+  已读进度（每人每会话一行）；标记已读即把进度推进到最新消息 id
 
 要点：
 
@@ -120,7 +125,9 @@ chat/
   "清空聊天记录" = 删除该会话下 messages（会话保留），上下文随之重置。
 - 人人会话：`(peer_a_id, peer_b_id)` 幂等——同一对用户只有一条会话，重复添加返回现有。
 - 联系人被删除：会话与消息级联删除；联系人停用：仅隐藏入口，数据保留。
-- 兼容迁移（init_db 时自动执行）：旧库无 `users`/`conversations.kind` 等列时，
+- 未读计数：bot 会话只数 `role='assistant'` 的消息（用户自己的消息 sender 同为 NULL，
+  按 role 排除）；human 会话只数对方消息（`sender_user_id != 我`）。
+- 兼容迁移（init_db 时自动执行）：旧库无 `users.avatar`/`conversations.kind` 等列时，
   SQLite `ALTER TABLE ADD COLUMN` 补齐并回填默认值，不丢已有服务商/消息。
 - 聊天不需要"选模型"：发消息的目标模型由联系人（会话）决定。
 
@@ -137,11 +144,14 @@ REST（JSON，前缀 `/api`）：
 | GET / POST | /api/providers/{id}/models | 模型列表 / 添加联系人 |
 | PATCH / DELETE | /api/models/{id} | 启停 / 删除 |
 | GET | /api/models | 全部启用模型（通讯录用） |
-| GET | /api/conversations | 聊天列表（人 + 机器人融合）：联系人信息 + 最后消息预览 + 时间，按最后消息倒序 |
+| GET | /api/conversations | 聊天列表（人 + 机器人融合）：联系人信息 + 最后消息预览 + 时间 + 未读数，按最后消息倒序 |
 | POST | /api/conversations | 幂等创建：`{"kind":"bot","model_id":...}` 或 `{"kind":"human","peer_user_id":"..."}` |
-| GET | /api/conversations/{id}/messages | 历史消息（human 会话含 sender_user_id） |
+| POST | /api/conversations/{id}/read | 标记已读：把已读进度推进到该会话最新消息；human 会话经 ws 推送 read 事件给对方 |
+| GET | /api/conversations/{id}/messages | 历史消息（human 会话含 sender_user_id 与 read 已读状态） |
 | GET / POST | /api/users | 按 user_id 搜索（加人用）/ 注册自己的身份 |
 | GET / PUT | /api/me | 当前身份（由请求头 X-User-Id 指定） |
+| POST | /api/me/avatar | multipart 上传我的头像（JPG/PNG/WebP，≤5MB，魔数校验），存 data/avatars/，返回 avatar URL |
+| GET | /avatars/{file} | 头像静态文件（FastAPI StaticFiles 挂载） |
 
 - 身份头：人人相关 REST 请求带 `X-User-Id: <user_id>`（MVP 无登录，服务端以此识别"我是谁"；
   ws 握手 query 同参）。
@@ -168,20 +178,27 @@ event: error   data: {"code": "bad_key", "message": "API Key 无效"}
 
 ### 5.1 WebSocket 实时通道（人人通信，独立于 AI SSE 链路）
 
-连接：`ws://<host>/api/ws?client_id=<用户标识>`（MVP 无用户体系，握手自报身份；
-后续接入 users 表后改为鉴权后从会话推导）。消息为 JSON 文本帧：
+连接：`ws://<host>/api/ws?user_id=<身份>`（MVP 无用户体系，握手 query 自报身份）。
+消息为 JSON 文本帧：
 
 | 方向 | 类型 | payload | 说明 |
 | --- | --- | --- | --- |
 | 上行 | ping | `{}` | 心跳，服务端回 `{"type":"pong"}` |
-| 上行 | message | `{"to":"<client_id>","content":"..."}` | 发给指定用户 |
-| 下行 | message | `{"from":"<client_id>","content":"..."}` | 服务端转发给接收方全部在线连接 |
-| 下行 | error | `{"code":"offline"\|"bad_request","message":"..."}` | 对方不在线 / 请求非法 |
+| 上行 | message | `{"to":"<user_id>","content":"..."}` | 发给指定用户（落库 + 转发 + ack） |
+| 上行 | typing / read | `{"to":"<user_id>"}` | 正在输入 / 已读回执（转发，不落库） |
+| 下行 | sync | `{}` | 连接建立后通知客户端刷新列表/消息（离线消息由此补齐）；安卓端收到即重拉列表/会话 |
+| 下行 | message | `{"from":"...","message_id":N,"conversation_id":N,"content":"...","ts":"..."}` | 转发对方消息 |
+| 下行 | ack | `{"message_id":N,"conversation_id":N,"delivered":bool}` | 发送方确认（已送达/对方离线） |
+| 下行 | typing / read | `{"from":"..."}` / `{"from":"...","conversation_id":N,"last_read_msg_id":N}` | 转发事件 |
+| 下行 | online | `{"user_id":"...","online":bool}` | 会话对方上下线 |
+| 下行 | error | `{"code":"...","message":"..."}` | 请求非法 / 对方不存在 |
 
-- 连接管理（services/ws.py）：内存注册表 `client_id → 连接集合`（多端在线全送达），
-  断线自动清理；发送失败即剔除该连接。
+- 连接管理（services/ws.py）：内存注册表 `user_id → 连接集合`（多端在线全送达），
+  断线自动清理；发送失败即剔除该连接。断线后客户端指数退避重连（≤30s），
+  重连成功即收到 sync 事件补齐离线消息。
 - 通道独立：不碰 /api/chat、不碰 providers 适配层；AI 流式仍走 SSE。
-- 后续演进（不在本轮）：users/会话成员表、消息落库、离线补推、在线状态事件、已读回执。
+- 已读进度（conversation_reads）：进会话 / 收新消息 / AI 回复完成时客户端调
+  POST /api/conversations/{id}/read 推进；对方经 read 事件刷新自己消息的已读状态。
 
 ## 6. Provider 适配层
 
@@ -246,6 +263,8 @@ agent 类模板（hermes / dshweb，`agent=True`）：模型清单留空由用�
 
 - API Key 存服务端 SQLite；REST 响应一律脱敏（前 4 后 4，中间 `****`）。
 - Key 不写日志、不进错误消息；安卓端不缓存 Key，只持有后端地址（DataStore）。
+- 头像上传：仅接受 JPG/PNG/WebP（content-type + 文件头魔数双重校验），≤5MB，
+  随机文件名存 data/avatars/（不走用户输入路径，无路径穿越）。
 - MVP 后端无用户鉴权（前提：自有服务器、仅自己访问）；CORS 按需收紧。
 - 后端地址使用 HTTPS 域名（现有 Caddy 证书）；P2 多用户时再加鉴权。
 

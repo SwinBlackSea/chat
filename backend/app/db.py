@@ -110,6 +110,10 @@ def _migrate_schema_sync(db_path: str) -> None:
         elif msg_cols and "sender_user_id" not in msg_cols:
             # 中间态：conversations 已是新结构，仅补 messages 列
             conn.execute("ALTER TABLE messages ADD COLUMN sender_user_id VARCHAR(64)")
+        # 头像列（users）：新库 create_all 已建，旧库这里补
+        user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+        if user_cols and "avatar" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN avatar VARCHAR(255)")
         for sql in _INDEX_SQL:
             conn.execute(sql)
         conn.commit()

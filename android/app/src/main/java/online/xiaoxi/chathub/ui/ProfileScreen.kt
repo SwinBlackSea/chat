@@ -1,5 +1,8 @@
 package online.xiaoxi.chathub.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -35,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,9 +65,51 @@ fun ProfileScreen(
 ) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val storeUserId by settingsStore.userId.collectAsState(initial = "")
     val storeDisplayName by settingsStore.displayName.collectAsState(initial = "")
     var editingIdentity by remember { mutableStateOf(false) }
+    var avatarMsg by remember { mutableStateOf<String?>(null) }
+
+    // 进入"我"页/身份就绪后拉取我的资料（含头像），上传后也据此刷新
+    LaunchedEffect(Backend.userId) {
+        if (Backend.userId.isNotEmpty()) {
+            try {
+                val me = api.me()
+                if (me.avatar != null) Backend.myAvatar = me.avatar
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // 系统 Photo Picker 选图（免存储权限）→ 上传
+    val pickAvatar = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val resolver = context.contentResolver
+                    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (bytes == null || bytes.isEmpty()) {
+                        avatarMsg = "读取图片失败"
+                        return@launch
+                    }
+                    val mime = resolver.getType(uri) ?: "image/*"
+                    avatarMsg = null
+                    val path = api.uploadAvatar(bytes, mime)
+                    if (path != null) {
+                        Backend.myAvatar = path
+                        avatarMsg = "头像已更新"
+                    } else {
+                        avatarMsg = "上传失败"
+                    }
+                } catch (e: Exception) {
+                    avatarMsg = "上传失败：${e.message}"
+                }
+            }
+        }
+    }
 
     Column(
         modifier
@@ -91,7 +137,15 @@ fun ProfileScreen(
                 .padding(horizontal = 20.dp, vertical = 28.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Avatar(storeDisplayName.ifEmpty { "?" }, null, size = 64.dp)
+            Avatar(
+                storeDisplayName.ifEmpty { "?" },
+                null,
+                size = 64.dp,
+                onClick = {
+                    pickAvatar.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                imageUrl = Backend.myAvatar,
+            )
             Spacer(Modifier.width(16.dp))
             Column {
                 Text(
@@ -106,6 +160,10 @@ fun ProfileScreen(
                     fontSize = 13.sp,
                     color = if (storeUserId.isEmpty()) WxRed else WxText2,
                 )
+                if (avatarMsg != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(avatarMsg!!, fontSize = 12.sp, color = WxText2)
+                }
             }
         }
 
@@ -206,6 +264,7 @@ fun ProfileScreen(
                             api.registerUser(uid, draftName.trim().ifEmpty { uid })
                             settingsStore.setIdentity(uid, draftName.trim().ifEmpty { uid })
                             Backend.userId = uid
+                            Backend.myAvatar = null // 身份变化，头像待拉取
                             WsHub.restart()
                         } catch (_: Exception) {
                         }

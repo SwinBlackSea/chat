@@ -1,5 +1,7 @@
 package online.xiaoxi.chathub.ui
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -44,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import kotlin.math.abs
+import online.xiaoxi.chathub.data.AvatarLoader
+import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.theme.WxText2
 
 private val AVATAR_PALETTE = listOf(
@@ -55,13 +62,27 @@ private val AVATAR_PALETTE = listOf(
 )
 
 @Composable
-fun Avatar(letter: String, colorHex: String?, size: Dp = 44.dp, onClick: (() -> Unit)? = null) {
+fun Avatar(
+    letter: String,
+    colorHex: String?,
+    size: Dp = 44.dp,
+    onClick: (() -> Unit)? = null,
+    imageUrl: String? = null,
+) {
     val (bg, fg) = remember(letter, colorHex) {
         val parsed = colorHex?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)
         if (parsed != null) {
             Color(0xFF000000 or (parsed and 0xFFFFFF)) to Color(0xFFFFFFFF)
         } else {
             AVATAR_PALETTE[abs((letter.hashCode())) % AVATAR_PALETTE.size]
+        }
+    }
+    // 头像图片：优先显示上传的图片，加载失败/未上传回退字母头像
+    var bitmap by remember(imageUrl) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(imageUrl) {
+        val url = imageUrl
+        if (url != null && Backend.baseUrl.isNotEmpty()) {
+            bitmap = AvatarLoader.load(Backend.baseUrl.trimEnd('/') + url) ?: bitmap
         }
     }
     Box(
@@ -72,12 +93,22 @@ fun Avatar(letter: String, colorHex: String?, size: Dp = 44.dp, onClick: (() -> 
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = letter.take(1).uppercase(),
-            color = fg,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = (size.value * 0.38f).sp,
-        )
+        val img = bitmap
+        if (img != null) {
+            Image(
+                bitmap = img.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(size).clip(CircleShape),
+            )
+        } else {
+            Text(
+                text = letter.take(1).uppercase(),
+                color = fg,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = (size.value * 0.38f).sp,
+            )
+        }
     }
 }
 

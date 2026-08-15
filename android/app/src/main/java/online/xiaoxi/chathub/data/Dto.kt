@@ -56,6 +56,7 @@ data class ConversationDto(
     val modelCode: String,
     val providerName: String,
     val avatarColor: String?,
+    val avatar: String?,
     val contextLength: Int?,
     val systemPrompt: String?,
     val peerUserId: String?,
@@ -75,6 +76,7 @@ data class ConversationDto(
             modelCode = o.getString("model_code"),
             providerName = o.getString("provider_name"),
             avatarColor = o.optString("avatar_color").takeIf { it.isNotEmpty() && it != "null" },
+            avatar = o.optString("avatar").takeIf { it.isNotEmpty() && it != "null" },
             contextLength = if (o.isNull("context_length")) null else o.getInt("context_length"),
             systemPrompt = if (o.isNull("system_prompt")) null else o.getString("system_prompt"),
             peerUserId = if (o.isNull("peer_user_id")) null else o.getString("peer_user_id"),
@@ -93,6 +95,7 @@ data class UserDto(
     val userId: String,
     val displayName: String,
     val avatarColor: String?,
+    val avatar: String?,
 ) {
     companion object {
         fun fromJson(o: JSONObject) = UserDto(
@@ -100,6 +103,7 @@ data class UserDto(
             userId = o.getString("user_id"),
             displayName = o.getString("display_name"),
             avatarColor = o.optString("avatar_color").takeIf { it.isNotEmpty() && it != "null" },
+            avatar = o.optString("avatar").takeIf { it.isNotEmpty() && it != "null" },
         )
     }
 }

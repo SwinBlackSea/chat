@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -23,6 +24,9 @@ object Backend {
     /** 自托管身份：user_id 即"我是谁"，人人聊天 REST 请求带 X-User-Id 头。
      *  用 State 包装：身份异步加载完成后能触发 UI 重组（气泡左右判断等）。 */
     var userId: String by mutableStateOf("")
+
+    /** 我的头像 URL 路径（/avatars/xxx.png），上传/拉取后赋值，驱动各处头像更新。 */
+    var myAvatar: String? by mutableStateOf(null)
 }
 
 fun normalizeServerUrl(raw: String): String? {
@@ -288,6 +292,25 @@ class ApiClient(private val serverUrl: String? = null) {
 
     suspend fun markRead(conversationId: Int) {
         request(Request.Builder().url(url("/api/conversations/$conversationId/read")).post("{}".toRequestBody(json)))
+    }
+
+    /** 上传我的头像（multipart），返回头像 URL 路径（如 /avatars/xxx.png）。 */
+    suspend fun uploadAvatar(imageBytes: ByteArray, mimeType: String): String? = withContext(Dispatchers.IO) {
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("file", "avatar", imageBytes.toRequestBody(mimeType.toMediaType()))
+            .build()
+        val builder = Request.Builder().url(url("/api/me/avatar")).post(body)
+        val authed = if (Backend.userId.isNotEmpty()) {
+            builder.header("X-User-Id", Backend.userId)
+        } else {
+            builder
+        }
+        http.newCall(authed.build()).execute().use { resp ->
+            val respBody = resp.body?.string().orEmpty()
+            if (!resp.isSuccessful) throw ApiException(resp.code, errorMessage(respBody, resp.code))
+            JSONObject(respBody).optString("avatar").takeIf { it.isNotEmpty() }
+        }
     }
 
     fun startChat(

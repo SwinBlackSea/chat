@@ -37,6 +37,7 @@ class UserOut(BaseModel):
     user_id: str
     display_name: str
     avatar_color: str | None
+    avatar: str | None = None  # 头像 URL 路径（/avatars/xxx.png）
 
 
 class UserUpdate(BaseModel):
@@ -114,6 +115,7 @@ class ConversationOut(BaseModel):
     model_code: str = ""
     provider_name: str = ""
     avatar_color: str | None = None
+    avatar: str | None = None  # 联系人头像 URL 路径（human 会话对方、bot 会话无）
     context_length: int | None = None
     system_prompt: str | None = None
     peer_user_id: str | None = None
