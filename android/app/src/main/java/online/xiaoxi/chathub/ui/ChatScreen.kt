@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -84,6 +87,7 @@ private data class UiMessage(
 )
 
 @Composable
+@androidx.compose.foundation.layout.ExperimentalLayoutApi
 fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
@@ -176,6 +180,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     LaunchedEffect(listState) {
         snapshotFlow { messages.size }.distinctUntilChanged().collect { size ->
             if (size > 0) listState.animateScrollToItem(size - 1)
+        }
+    }
+
+    // 键盘弹出/收起时滚动到最新消息（避免最新几条被输入法遮挡）
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) {
+        if (imeVisible && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size - 1)
         }
     }
 
@@ -307,7 +319,10 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .imePadding(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
