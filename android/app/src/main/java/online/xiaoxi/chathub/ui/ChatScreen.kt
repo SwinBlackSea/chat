@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -108,6 +109,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     var input by rememberSaveable { mutableStateOf("") }
     var screenError by remember { mutableStateOf<String?>(null) }
     var typingByPeer by remember { mutableStateOf(false) }
+    var loadedOnce by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val isHuman = conv?.isHuman == true
@@ -233,7 +235,18 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
 
     LaunchedEffect(listState) {
         snapshotFlow { messages.size }.distinctUntilChanged().collect { size ->
-            if (size > 0) listState.animateScrollToItem(size - 1)
+            if (size > 0) {
+                if (!loadedOnce) {
+                    // 首次加载：瞬时定位到底部最新消息（不做滚动动画，避免进页抖动）
+                    loadedOnce = true
+                    listState.scrollToItem(size - 1)
+                } else {
+                    // 已有内容：仅当用户在看底部附近时平滑跟随新消息；
+                    // 上滑阅读历史时不打扰（微信式行为），动画克制
+                    val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                    if (last >= size - 3) listState.animateScrollToItem(size - 1)
+                }
+            }
         }
     }
 
@@ -390,6 +403,25 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
         ) {
+            // 加载占位：消息未到时同容器内显示轻量加载，内容到达直接替换，无布局跳动
+            if (messages.isEmpty() && screenError == null) {
+                item {
+                    Box(
+                        Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Accent,
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text("加载中…", color = WxText3, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
                 val mine = if (isHuman) {
                     msg.senderUserId == Backend.userId
