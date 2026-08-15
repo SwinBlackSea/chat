@@ -2,6 +2,7 @@ package online.xiaoxi.chathub.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,7 +40,11 @@ import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
 
 @Composable
-fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
+fun ContactsScreen(
+    onOpen: (Int) -> Unit,
+    visible: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
     var humans by remember { mutableStateOf<List<ConversationDto>>(emptyList()) }
@@ -71,7 +76,7 @@ fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
     }
 
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(Color.White)
             .alpha(if (visible) 1f else 0f)
@@ -95,6 +100,11 @@ fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
         )
         if (error != null) {
             Text(error!!, color = WxRed, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        }
+        if (!loaded) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("加载中…", color = WxText3, fontSize = 14.sp)
+            }
         }
         LazyColumn {
             if (humans.isNotEmpty()) {

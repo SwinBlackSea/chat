@@ -57,6 +57,7 @@ fun SettingsScreen(
     onOpenProviders: () -> Unit,
     settingsStore: SettingsStore,
     visible: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
@@ -87,7 +88,7 @@ fun SettingsScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = online.xiaoxi.chathub.theme.WxBackground,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .alpha(if (visible) 1f else 0f)
             .pointerInput(visible) {

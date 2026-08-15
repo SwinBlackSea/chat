@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import online.xiaoxi.chathub.theme.WxBackground
 import online.xiaoxi.chathub.theme.WxGreen
 import online.xiaoxi.chathub.theme.WxLineStrong
@@ -61,11 +62,27 @@ fun MainScreen(
             }
         },
     ) { padding ->
-        // 三个 Tab 常驻组合：切换只改可见性，不重建不重新请求（瞬时切换）
+        // 三个 Tab 常驻组合：切换只改可见性，不重建不重新请求（瞬时切换）。
+        // 可见 Tab 用 zIndex 置顶，避免隐藏页（触摸拦截）挡住下层点击。
         Box(Modifier.padding(padding)) {
-            ChatListScreen(onOpenConversation, onAddContact, visible = tab == 0)
-            ContactsScreen(onOpenConversation, visible = tab == 1)
-            SettingsScreen(onAddProvider, onOpenProviders, settingsStore, visible = tab == 2)
+            ChatListScreen(
+                onOpenConversation,
+                onAddContact,
+                visible = tab == 0,
+                Modifier.zIndex(if (tab == 0) 1f else 0f),
+            )
+            ContactsScreen(
+                onOpenConversation,
+                visible = tab == 1,
+                Modifier.zIndex(if (tab == 1) 1f else 0f),
+            )
+            SettingsScreen(
+                onAddProvider,
+                onOpenProviders,
+                settingsStore,
+                visible = tab == 2,
+                Modifier.zIndex(if (tab == 2) 1f else 0f),
+            )
         }
     }
 }

@@ -51,7 +51,12 @@ import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
 
 @Composable
-fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit, visible: Boolean = true) {
+fun ChatListScreen(
+    onOpen: (Int) -> Unit,
+    onAddContact: () -> Unit,
+    visible: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -92,7 +97,7 @@ fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit, visible: Boo
     }
 
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .background(Color.White)
             .alpha(if (visible) 1f else 0f)
@@ -123,7 +128,10 @@ fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit, visible: Boo
                 fontSize = 13.sp,
                 modifier = Modifier.padding(16.dp),
             )
-            loaded && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            !loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("加载中…", color = WxText3, fontSize = 14.sp)
+            }
+            items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("还没有对话，去通讯录选一位联系人，或点右上角 + 加人", color = WxText2, fontSize = 14.sp)
             }
             else -> LazyColumn {
