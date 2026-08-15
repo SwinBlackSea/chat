@@ -17,7 +17,6 @@ async def chat(body: ChatIn, session: AsyncSession = Depends(get_session)):
         session,
         body.conversation_id,
         body.content,
-        regenerate=body.regenerate,
     )
 
     async def sse():

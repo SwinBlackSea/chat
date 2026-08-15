@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -40,8 +40,6 @@ async def prepare_chat(
     session: AsyncSession,
     conversation_id: int,
     content: str,
-    *,
-    regenerate: bool = False,
 ) -> PreparedChat:
     conv = await session.get(
         Conversation,
@@ -65,41 +63,21 @@ async def prepare_chat(
         .all()
     )
 
-    if regenerate:
-        last_user = next(
-            (message for message in reversed(stored_messages) if message.role == "user"),
-            None,
-        )
-        if last_user is None:
-            raise HTTPException(status_code=409, detail="没有可重新生成的用户消息")
-        if last_user.content != content:
-            raise HTTPException(status_code=409, detail="最后一条用户消息已变化，请刷新后重试")
-        await session.execute(
-            delete(Message).where(
-                Message.conversation_id == conv.id,
-                Message.id > last_user.id,
-            )
-        )
-        history = [message for message in stored_messages if message.id <= last_user.id]
-    else:
-        history = stored_messages
-
     messages: list[dict[str, str]] = []
     if conv.system_prompt:
         messages.append({"role": "system", "content": conv.system_prompt})
-    for msg in history:
+    for msg in stored_messages:
         if msg.role in ("user", "assistant") and msg.error is None:
             messages.append({"role": msg.role, "content": msg.content})
-    if not regenerate:
-        messages.append({"role": "user", "content": content})
-        session.add(
-            Message(
-                conversation_id=conv.id,
-                role="user",
-                content=content,
-                model_id=model.model_id,
-            )
+    messages.append({"role": "user", "content": content})
+    session.add(
+        Message(
+            conversation_id=conv.id,
+            role="user",
+            content=content,
+            model_id=model.model_id,
         )
+    )
     conv.updated_at = utcnow()
     await session.commit()
 

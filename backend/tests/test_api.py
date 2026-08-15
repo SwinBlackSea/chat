@@ -152,68 +152,6 @@ async def test_model_patch_and_delete(client):
     assert len((await client.get(f"/api/providers/{provider['id']}/models")).json()) == 1
 
 
-async def test_chat_regenerate_replaces_last_assistant(client):
-    provider = await seed_provider(client)
-    models = (await client.get(f"/api/providers/{provider['id']}/models")).json()
-    conv = (await client.post("/api/conversations", json={"model_id": models[0]["id"]})).json()
-
-    async with respx.mock:
-        respx.route(host="test").pass_through()
-        respx.post(UPSTREAM).mock(return_value=httpx.Response(200, text=SSE_REPLY))
-        resp = await client.post(
-            "/api/chat", json={"conversation_id": conv["id"], "content": "在吗"}
-        )
-    assert "event: done" in resp.text
-
-    # 重新生成：上游返回不同内容，最后一条 assistant 被替换
-    async with respx.mock:
-        respx.route(host="test").pass_through()
-        respx.post(UPSTREAM).mock(
-            return_value=httpx.Response(
-                200,
-                text='data: {"choices":[{"delta":{"content":"重新回答"}}]}\n\n'
-                'data: {"choices":[{}],"usage":{"prompt_tokens":1,"completion_tokens":1}}\n\n'
-                "data: [DONE]\n\n",
-            )
-        )
-        resp = await client.post(
-            "/api/chat",
-            json={"conversation_id": conv["id"], "content": "在吗", "regenerate": True},
-        )
-    assert "event: done" in resp.text
-
-    messages = (await client.get(f"/api/conversations/{conv['id']}/messages")).json()
-    assert [m["role"] for m in messages] == ["user", "assistant"]
-    assert messages[-1]["content"] == "重新回答"
-
-
-async def test_chat_regenerate_mismatch_rejected(client):
-    provider = await seed_provider(client)
-    models = (await client.get(f"/api/providers/{provider['id']}/models")).json()
-    conv = (await client.post("/api/conversations", json={"model_id": models[0]["id"]})).json()
-
-    async with respx.mock:
-        respx.route(host="test").pass_through()
-        respx.post(UPSTREAM).mock(return_value=httpx.Response(200, text=SSE_REPLY))
-        await client.post("/api/chat", json={"conversation_id": conv["id"], "content": "在吗"})
-
-    resp = await client.post(
-        "/api/chat",
-        json={"conversation_id": conv["id"], "content": "内容已变", "regenerate": True},
-    )
-    assert resp.status_code == 409
-
-    # 空会话直接 regenerate 也拒绝
-    provider2 = (await client.post("/api/providers", json=DEEPSEEK)).json()
-    models2 = (await client.get(f"/api/providers/{provider2['id']}/models")).json()
-    conv2 = (await client.post("/api/conversations", json={"model_id": models2[0]["id"]})).json()
-    resp = await client.post(
-        "/api/chat",
-        json={"conversation_id": conv2["id"], "content": "hi", "regenerate": True},
-    )
-    assert resp.status_code == 409
-
-
 DSHWEB = {
     "kind": "dshweb",
     "name": "我的 dshweb",

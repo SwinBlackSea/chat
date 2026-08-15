@@ -276,25 +276,18 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
         }
     }
 
-    fun send(regenerate: Boolean = false, regenerateContent: String? = null) {
-        val text = if (regenerate) regenerateContent.orEmpty() else input.trim()
+    fun send() {
+        val text = input.trim()
         if (text.isEmpty() || streaming) return
-        if (!regenerate) input = ""
+        input = ""
         val assistantKey = "a-${System.currentTimeMillis()}"
-        val baseMessages = if (regenerate) {
-            val lastUserIndex = messages.indexOfLast { it.role == "user" }
-            if (lastUserIndex < 0) return
-            messages.take(lastUserIndex + 1)
-        } else {
-            messages + UiMessage("u-$assistantKey", "user", text, null)
-        }
+        val baseMessages = messages + UiMessage("u-$assistantKey", "user", text, null)
         messages = baseMessages +
             UiMessage(assistantKey, "assistant", "", null)
         screenError = null
         api.startChat(
             conversationId = conversationId,
             content = text,
-            regenerate = regenerate,
             onStart = { ChatGenerationTracker.start(conversationId, it) },
         ) { event ->
             mainHandler.post {
@@ -459,24 +452,6 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 }
                             }
 
-                        }
-                        if (!mine) {
-                            // 重新生成：气泡右侧外部小字（bot 最后一条回答，不占行高不重叠）
-                            val lastUser = messages.take(index).lastOrNull { it.role == "user" }
-                            val isLastAssistant = msg.role == "assistant" &&
-                                index == messages.indexOfLast { it.role == "assistant" }
-                            if (isLastAssistant && lastUser != null && !streaming) {
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "重新生成",
-                                    color = WxText2,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier
-                                        .clickable {
-                                            send(regenerate = true, regenerateContent = lastUser.content)
-                                        },
-                                )
-                            }
                         }
                         if (mine) {
                             Spacer(Modifier.width(10.dp))

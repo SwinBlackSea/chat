@@ -316,7 +316,6 @@ class ApiClient(private val serverUrl: String? = null) {
     fun startChat(
         conversationId: Int,
         content: String,
-        regenerate: Boolean = false,
         onStart: (Call) -> Unit = {},
         onEvent: (ChatEvent) -> Unit,
     ): Call {
@@ -324,7 +323,6 @@ class ApiClient(private val serverUrl: String? = null) {
             mapOf(
                 "conversation_id" to conversationId,
                 "content" to content,
-                "regenerate" to regenerate,
             ),
         )
         val req = Request.Builder().url(url("/api/chat")).post(body).build()

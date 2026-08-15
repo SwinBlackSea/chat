@@ -141,7 +141,6 @@ class MessageOut(BaseModel):
 class ChatIn(BaseModel):
     conversation_id: int
     content: str = Field(min_length=1, max_length=100_000)
-    regenerate: bool = False
 
     @field_validator("content")
     @classmethod
