@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.SettingsStore
 import online.xiaoxi.chathub.data.WsHub
@@ -44,6 +48,17 @@ class MainActivity : ComponentActivity() {
                         LaunchedEffect(userId, displayName) {
                             Backend.userId = userId
                             if (userId.isNotEmpty()) WsHub.start() else WsHub.stop()
+                        }
+                        // App 回到前台时检查实时通道，未连接则自动重连
+                        val lifecycleOwner = LocalLifecycleOwner.current
+                        DisposableEffect(lifecycleOwner) {
+                            val observer = LifecycleEventObserver { _, event ->
+                                if (event == Lifecycle.Event.ON_RESUME && !WsHub.connected.value) {
+                                    WsHub.restart()
+                                }
+                            }
+                            lifecycleOwner.lifecycle.addObserver(observer)
+                            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                         }
                         AppRoot(store)
                     }
