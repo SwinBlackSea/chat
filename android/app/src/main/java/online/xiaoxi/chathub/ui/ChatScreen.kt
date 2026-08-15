@@ -416,18 +416,19 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 }
                             }
 
-                            // 重新生成：贴在气泡外左下角（bot 最后一条回答）
+                        }
+                        if (!mine) {
+                            // 重新生成：气泡右侧外部小字（bot 最后一条回答，不占行高不重叠）
                             val lastUser = messages.take(index).lastOrNull { it.role == "user" }
                             val isLastAssistant = msg.role == "assistant" &&
                                 index == messages.indexOfLast { it.role == "assistant" }
                             if (isLastAssistant && lastUser != null && !streaming) {
+                                Spacer(Modifier.width(6.dp))
                                 Text(
                                     "重新生成",
                                     color = WxText2,
                                     fontSize = 11.sp,
                                     modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .offset(x = (-6).dp, y = 0.dp)
                                         .clickable {
                                             send(regenerate = true, regenerateContent = lastUser.content)
                                         },
