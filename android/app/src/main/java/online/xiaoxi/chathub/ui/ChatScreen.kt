@@ -137,6 +137,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 is WsEvent.Message -> {
                     if (event.conversationId == conversationId) {
                         mainHandler.post {
+                            // 立即追加：ws 数据直接上屏（零网络等待，平滑插入不抖动），
+                            // 后台 reload 校准顺序/完整性（漏消息由此补齐）
+                            val key = event.messageId.toString()
+                            if (messages.none { it.key == key }) {
+                                messages = messages + UiMessage(
+                                    key, "user", event.content, null, event.from, event.ts,
+                                )
+                            }
                             scope.launch {
                                 try {
                                     reload()
@@ -170,14 +178,15 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     }
                 }
                 is WsEvent.Read -> {
-                    // 对方已读回执：刷新当前会话，更新自己消息的已读状态
+                    // 对方已读回执：本地即时更新自己消息的已读状态（不整表 reload，避免重排抖动）
                     if (event.conversationId == conversationId) {
                         mainHandler.post {
-                            scope.launch {
-                                try {
-                                    reload()
-                                } catch (e: Exception) {
-                                    screenError = "刷新失败：${e.message}"
+                            messages = messages.map {
+                                val id = it.key.toIntOrNull()
+                                if (it.senderUserId == event.from && id != null && id <= event.lastReadMsgId) {
+                                    it.copy(read = true)
+                                } else {
+                                    it
                                 }
                             }
                         }
@@ -241,10 +250,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     loadedOnce = true
                     listState.scrollToItem(size - 1)
                 } else {
-                    // 已有内容：仅当用户在看底部附近时平滑跟随新消息；
-                    // 上滑阅读历史时不打扰（微信式行为），动画克制
-                    val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                    if (last >= size - 3) listState.animateScrollToItem(size - 1)
+                    // 已有内容：仅当用户正贴住底部（最后可见项在末尾且底部贴近视口底）时
+                    // 才平滑跟随新消息；上滑阅读历史时不打扰（微信式行为）
+                    val info = listState.layoutInfo
+                    val last = info.visibleItemsInfo.lastOrNull()
+                    val atBottom = last != null &&
+                        last.index >= info.totalItemsCount - 3 &&
+                        last.offset + last.size >= info.viewportEndOffset - 60
+                    if (atBottom) listState.animateScrollToItem(size - 1)
                 }
             }
         }
