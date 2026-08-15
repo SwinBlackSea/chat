@@ -3,6 +3,9 @@ package online.xiaoxi.chathub.ui
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -160,7 +164,18 @@ fun ChatListScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(conv.contactName, conv.avatarColor, size = 48.dp)
+                        Box {
+                            Avatar(conv.contactName, conv.avatarColor, size = 48.dp)
+                            // 微信式未读红点（数字角标，头像右上角）
+                            if (conv.unreadCount > 0) {
+                                Badge(
+                                    count = conv.unreadCount,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 6.dp, y = (-6).dp),
+                                )
+                            }
+                        }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -179,21 +194,27 @@ fun ChatListScreen(
                                 )
                             }
                             Spacer(Modifier.height(5.dp))
-                            Text(
-                                if (conv.id in activeConversations) {
-                                    "正在回答…"
-                                } else {
-                                    conv.lastMessagePreview ?: ""
-                                },
-                                fontSize = 13.sp,
-                                color = if (conv.id in activeConversations) {
-                                    online.xiaoxi.chathub.theme.WxGreen
-                                } else {
-                                    WxText3
-                                },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (conv.id in activeConversations) {
+                                        "正在回答…"
+                                    } else {
+                                        conv.lastMessagePreview ?: ""
+                                    },
+                                    fontSize = 13.sp,
+                                    color = if (conv.id in activeConversations) {
+                                        online.xiaoxi.chathub.theme.WxGreen
+                                    } else {
+                                        WxText3
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (conv.unreadCount > 0 && conv.id in activeConversations) {
+                                    Text("未读", fontSize = 11.sp, color = WxRed)
+                                }
+                            }
                         }
                     }
                     if (index < items.size - 1) {
@@ -204,5 +225,21 @@ fun ChatListScreen(
                 }
             }
         }
+    }
+}
+
+/** 微信式未读红点：红底白字数字（定位由调用方 modifier 提供）。 */
+@Composable
+private fun Badge(count: Int, modifier: Modifier = Modifier) {
+    val text = if (count > 99) "99+" else count.toString()
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .clip(CircleShape)
+            .background(WxRed)
+            .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    ) {
+        Text(text, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
     }
 }

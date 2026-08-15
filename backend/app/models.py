@@ -131,6 +131,26 @@ class Conversation(Base):
     )
 
 
+class ConversationRead(Base):
+    """会话已读进度：每个用户在每个会话的最后已读消息 id（未读数据此计算）。"""
+
+    __tablename__ = "conversation_reads"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "user_id", name="uq_reads_conv_user"),
+        Index("ix_reads_user", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[str] = mapped_column(String(64))
+    last_read_msg_id: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (Index("ix_messages_conversation", "conversation_id"),)

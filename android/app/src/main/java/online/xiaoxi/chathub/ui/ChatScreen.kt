@@ -123,6 +123,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             scope.launch {
                                 try {
                                     reload()
+                                    api.markRead(conversationId) // 正在看该会话，新消息即已读
                                 } catch (e: Exception) {
                                     screenError = "刷新失败：${e.message}"
                                 }
@@ -163,6 +164,11 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             reload()
         } catch (e: Exception) {
             screenError = "加载失败：${e.message}"
+        }
+        // 进入会话即标记已读（清未读红点）
+        try {
+            api.markRead(conversationId)
+        } catch (_: Exception) {
         }
         if (messages.isNotEmpty()) listState.scrollToItem(messages.size - 1)
     }
@@ -354,6 +360,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     ) {
                         Box(
                             modifier = Modifier
+                                .widthIn(max = 290.dp)
                                 .background(
                                     if (mine) WxBubbleMe else Color.White,
                                     bubbleShape(mine, firstInGroup, lastInGroup),

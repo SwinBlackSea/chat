@@ -39,9 +39,9 @@ class MainActivity : ComponentActivity() {
                     url.isNullOrBlank() -> SetupScreen(store)
                     else -> {
                         Backend.baseUrl = url!!
-                        Backend.userId = userId
-                        // 身份配置后建立 ws 连接；身份变化时由设置页调用 WsHub.restart
+                        // 身份在组合后写入 State（避免组合期间修改导致渲染错乱）
                         LaunchedEffect(userId, displayName) {
+                            Backend.userId = userId
                             if (userId.isNotEmpty()) WsHub.start() else WsHub.stop()
                         }
                         AppRoot(store)

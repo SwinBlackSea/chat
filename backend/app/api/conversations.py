@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..db import get_session
-from ..models import Conversation, Message, Model, User
+from ..models import Conversation, ConversationRead, Message, Model, User
 from ..schemas import (
     ConversationCreate,
     ConversationOut,
@@ -25,7 +25,10 @@ async def get_me(session: AsyncSession, x_user_id: str | None) -> User | None:
 
 
 def conversation_out(
-    conv: Conversation, last: Message | None, me_user_id: str | None = None
+    conv: Conversation,
+    last: Message | None,
+    me_user_id: str | None = None,
+    unread_count: int = 0,
 ) -> ConversationOut:
     preview = None
     when = None
@@ -54,6 +57,7 @@ def conversation_out(
             last_message_preview=preview,
             last_message_time=when,
             updated_at=conv.updated_at,
+            unread_count=unread_count,
         )
     return ConversationOut(
         id=conv.id,
@@ -69,7 +73,38 @@ def conversation_out(
         last_message_preview=preview,
         last_message_time=when,
         updated_at=conv.updated_at,
+        unread_count=unread_count,
     )
+
+
+async def _unread_counts(
+    session: AsyncSession, conversation_ids: list[int], me_user_id: str | None
+) -> dict[int, int]:
+    """批量计算每个会话的未读数（对方发送且晚于已读进度的消息）。"""
+    if not conversation_ids or not me_user_id:
+        return {cid: 0 for cid in conversation_ids}
+    stmt = (
+        select(Message.conversation_id, func.count(Message.id))
+        .outerjoin(
+            ConversationRead,
+            (ConversationRead.conversation_id == Message.conversation_id)
+            & (ConversationRead.user_id == me_user_id),
+        )
+        .where(
+            Message.conversation_id.in_(conversation_ids),
+            or_(
+                Message.sender_user_id.is_(None),
+                Message.sender_user_id != me_user_id,
+            ),
+            or_(
+                ConversationRead.last_read_msg_id.is_(None),
+                Message.id > ConversationRead.last_read_msg_id,
+            ),
+        )
+        .group_by(Message.conversation_id)
+    )
+    rows = (await session.execute(stmt)).all()
+    return {cid: int(count) for cid, count in rows}
 
 
 async def _last_messages(session: AsyncSession, conversation_ids: list[int]) -> dict[int, Message]:
@@ -123,9 +158,13 @@ async def list_conversations(
     human_rows = (await session.execute(human_stmt)).scalars().all()
     convs = [*bot_rows, *human_rows]
     last_by_conv = await _last_messages(session, [c.id for c in convs])
+    unread = await _unread_counts(session, [c.id for c in convs], me.user_id if me else None)
 
     result = [
-        conversation_out(c, last_by_conv.get(c.id), me.user_id if me else None) for c in convs
+        conversation_out(
+            c, last_by_conv.get(c.id), me.user_id if me else None, unread.get(c.id, 0)
+        )
+        for c in convs
     ]
     result.sort(key=lambda c: c.last_message_time or c.updated_at, reverse=True)
     return result
@@ -197,7 +236,51 @@ async def get_conversation(
     if conv is None:
         raise HTTPException(status_code=404, detail="会话不存在")
     last = await _last_messages(session, [conv.id])
-    return conversation_out(conv, last.get(conv.id), me.user_id if me else None)
+    unread = await _unread_counts(session, [conv.id], me.user_id if me else None)
+    return conversation_out(
+        conv, last.get(conv.id), me.user_id if me else None, unread.get(conv.id, 0)
+    )
+
+
+@router.post("/conversations/{conversation_id}/read")
+async def mark_read(
+    conversation_id: int,
+    session: AsyncSession = Depends(get_session),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
+    """标记会话已读：把已读进度推进到该会话最新消息。"""
+    me = await get_me(session, x_user_id)
+    if me is None:
+        raise HTTPException(status_code=400, detail="请先注册自己的身份（X-User-Id）")
+    conv = await session.get(Conversation, conversation_id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    latest = (
+        await session.execute(
+            select(func.max(Message.id)).where(Message.conversation_id == conversation_id)
+        )
+    ).scalar_one_or_none()
+    latest_id = latest or 0
+    existing = (
+        await session.execute(
+            select(ConversationRead).where(
+                ConversationRead.conversation_id == conversation_id,
+                ConversationRead.user_id == me.user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        session.add(
+            ConversationRead(
+                conversation_id=conversation_id,
+                user_id=me.user_id,
+                last_read_msg_id=latest_id,
+            )
+        )
+    else:
+        existing.last_read_msg_id = latest_id
+    await session.commit()
+    return {"ok": True}
 
 
 @router.get("/conversations/{conversation_id}/messages")

@@ -266,7 +266,8 @@ private fun highlightedCode(code: String): AnnotatedString = buildAnnotatedStrin
 fun MessageContent(text: String, textColor: Color) {
     val blocks = remember(text) { parseMarkdown(text) }
     val clipboard = LocalClipboardManager.current
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // wrap 内容：气泡宽度由内容决定（外层 Box 用 widthIn 限最大 290dp）
+    Column {
         blocks.forEach { block ->
             when (block) {
                 is MarkdownBlock.Code -> {

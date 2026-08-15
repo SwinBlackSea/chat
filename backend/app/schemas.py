@@ -120,6 +120,7 @@ class ConversationOut(BaseModel):
     last_message_preview: str | None = None
     last_message_time: datetime | None = None
     updated_at: datetime
+    unread_count: int = 0
 
 
 class MessageOut(BaseModel):
