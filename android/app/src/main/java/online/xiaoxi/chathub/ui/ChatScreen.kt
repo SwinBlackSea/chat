@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -336,7 +339,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 .fillMaxWidth()
                 .imePadding(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
                 val mine = if (isHuman) {
@@ -391,17 +394,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                     }
                                 }
                             }
-                            // 已读/未读：贴在气泡外右下角（不占布局空间，间距不受影响）
-                            if (mine && isHuman) {
-                                Text(
-                                    if (msg.read) "已读" else "未读",
-                                    color = if (msg.read) WxText3 else Accent,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = 6.dp, y = 0.dp),
-                                )
-                            }
+
                             // 重新生成：贴在气泡外左下角（bot 最后一条回答）
                             val lastUser = messages.take(index).lastOrNull { it.role == "user" }
                             val isLastAssistant = msg.role == "assistant" &&
@@ -421,7 +414,19 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             }
                         }
                         if (mine) {
-                            Spacer(Modifier.width(10.dp))
+                            // 已读回执：气泡右侧外部（微信式 ✓/✓✓），偏下贴近右下角
+                            if (isHuman) {
+                                Icon(
+                                    if (msg.read) Icons.Filled.DoneAll else Icons.Filled.Done,
+                                    contentDescription = if (msg.read) "已读" else "已送达",
+                                    tint = if (msg.read) WxText2 else WxText3,
+                                    modifier = Modifier
+                                        .padding(top = 14.dp)
+                                        .size(14.dp),
+                                )
+                                Spacer(Modifier.width(2.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
                             Avatar("我", null, size = 40.dp)
                         }
                     }
