@@ -87,7 +87,7 @@ private data class UiMessage(
 )
 
 @Composable
-@androidx.compose.foundation.layout.ExperimentalLayoutApi
+@kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()

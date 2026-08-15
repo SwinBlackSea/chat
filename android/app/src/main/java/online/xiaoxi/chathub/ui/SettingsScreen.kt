@@ -14,9 +14,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -54,11 +56,10 @@ import online.xiaoxi.chathub.theme.WxText3
 
 @Composable
 fun SettingsScreen(
+    onBack: () -> Unit,
     onAddProvider: () -> Unit,
     onOpenProviders: () -> Unit,
     settingsStore: SettingsStore,
-    visible: Boolean = true,
-    modifier: Modifier = Modifier,
 ) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
@@ -85,27 +86,11 @@ fun SettingsScreen(
         }
     }
     LaunchedEffect(Unit) { load() }
-    LaunchedEffect(visible) {
-        if (visible) load()
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = online.xiaoxi.chathub.theme.WxBackground,
-        modifier = modifier
-            .fillMaxSize()
-            .alpha(if (visible) 1f else 0f)
-            .pointerInput(visible) {
-                // 隐藏时消费所有触摸事件，避免挡住下层页面
-                if (!visible) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            event.changes.forEach { it.consume() }
-                        }
-                    }
-                }
-            },
+        modifier = Modifier.fillMaxSize(),
     ) { padding ->
         Column(
             Modifier
@@ -114,12 +99,22 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 24.dp),
         ) {
-            Text(
-                "设置",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                }
+                Text(
+                    "设置",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Spacer(Modifier.width(40.dp))
+            }
 
             SectionLabel("服务")
             Column(

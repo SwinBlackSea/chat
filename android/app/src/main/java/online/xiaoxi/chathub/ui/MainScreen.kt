@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import online.xiaoxi.chathub.theme.WxBackground
 import online.xiaoxi.chathub.theme.WxGreen
-import online.xiaoxi.chathub.theme.WxLineStrong
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.data.SettingsStore
 
@@ -33,6 +32,7 @@ fun MainScreen(
     onAddProvider: () -> Unit,
     onAddContact: () -> Unit,
     onOpenProviders: () -> Unit,
+    onOpenSettings: () -> Unit,
     settingsStore: SettingsStore,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -43,7 +43,11 @@ fun MainScreen(
                 containerColor = WxBackground,
                 tonalElevation = 0.dp,
             ) {
-                val items = listOf("聊天" to Icons.Filled.ChatBubble, "联系人" to Icons.Filled.People, "设置" to Icons.Filled.Settings)
+                val items = listOf(
+                    "聊天" to Icons.Filled.ChatBubble,
+                    "联系人" to Icons.Filled.People,
+                    "我" to Icons.Filled.Person,
+                )
                 items.forEachIndexed { index, (label, icon) ->
                     NavigationBarItem(
                         selected = tab == index,
@@ -76,10 +80,9 @@ fun MainScreen(
                 visible = tab == 1,
                 Modifier.zIndex(if (tab == 1) 1f else 0f),
             )
-            SettingsScreen(
-                onAddProvider,
-                onOpenProviders,
-                settingsStore,
+            ProfileScreen(
+                onOpenSettings = onOpenSettings,
+                settingsStore = settingsStore,
                 visible = tab == 2,
                 Modifier.zIndex(if (tab == 2) 1f else 0f),
             )
