@@ -216,7 +216,11 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
         messages = messages + UiMessage(key, "user", text, null, Backend.userId)
         screenError = null
         // 服务端落库后回 ack 事件，触发 reload 换成真实消息
-        WsHub.sendMessage(peer, text)
+        val ok = WsHub.sendMessage(peer, text)
+        if (!ok) {
+            screenError = "实时通道未连接，正在重连…"
+            WsHub.restart()
+        }
     }
 
     fun send(regenerate: Boolean = false, regenerateContent: String? = null) {
