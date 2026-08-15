@@ -1,3 +1,10 @@
+import os
+import tempfile
+
+# 必须在 import app 之前设置：ws 测试（TestClient + lifespan）使用的全局 engine 指向
+# 独立测试库，避免触碰开发/生产 data/chat.db。
+os.environ.setdefault("CHAT_DB_PATH", os.path.join(tempfile.gettempdir(), "chathub-pytest.db"))
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

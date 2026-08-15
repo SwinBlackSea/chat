@@ -18,6 +18,32 @@ class ModelCreate(BaseModel):
         return value
 
 
+class UserCreate(BaseModel):
+    user_id: str = Field(min_length=1, max_length=64)
+    display_name: str | None = Field(default=None, max_length=64)
+    avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("user_id")
+    @classmethod
+    def strip_user_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("user_id 不能为空")
+        return value
+
+
+class UserOut(BaseModel):
+    id: int
+    user_id: str
+    display_name: str
+    avatar_color: str | None
+
+
+class UserUpdate(BaseModel):
+    display_name: str | None = Field(default=None, max_length=64)
+    avatar_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
 class ProviderCreate(BaseModel):
     kind: str
     name: str | None = Field(default=None, max_length=64)
@@ -64,7 +90,16 @@ class ModelOut(BaseModel):
 
 
 class ConversationCreate(BaseModel):
-    model_id: int
+    kind: str = "bot"
+    model_id: int | None = None
+    peer_user_id: str | None = None
+
+    @field_validator("kind")
+    @classmethod
+    def valid_kind(cls, value: str) -> str:
+        if value not in ("bot", "human"):
+            raise ValueError("kind 必须是 bot 或 human")
+        return value
 
 
 class ConversationUpdate(BaseModel):
@@ -73,15 +108,17 @@ class ConversationUpdate(BaseModel):
 
 class ConversationOut(BaseModel):
     id: int
-    model_id: int
+    kind: str
+    model_id: int | None = None
     contact_name: str
-    model_code: str
-    provider_name: str
-    avatar_color: str | None
-    context_length: int | None
-    system_prompt: str | None
-    last_message_preview: str | None
-    last_message_time: datetime | None
+    model_code: str = ""
+    provider_name: str = ""
+    avatar_color: str | None = None
+    context_length: int | None = None
+    system_prompt: str | None = None
+    peer_user_id: str | None = None
+    last_message_preview: str | None = None
+    last_message_time: datetime | None = None
     updated_at: datetime
 
 
@@ -92,6 +129,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     model_id: str | None
+    sender_user_id: str | None = None
     error: str | None
     created_at: datetime
 

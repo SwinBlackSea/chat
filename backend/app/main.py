@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import chat, conversations, providers, ws
+from .api import chat, conversations, providers, users, ws
 from .db import init_db
 
 
@@ -18,6 +18,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 app.include_router(providers.router)
 app.include_router(conversations.router)
 app.include_router(chat.router)
+app.include_router(users.router)
 app.include_router(ws.router)
 
 

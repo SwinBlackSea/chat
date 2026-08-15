@@ -103,18 +103,25 @@ chat/
 - models: `id`, `provider_id`(FK→providers, CASCADE), `model_id`(上游模型名),
   `display_name`(联系人显示名), `avatar_color`(头像色，可空), `context_length`(可空),
   `is_enabled`(停用即从通讯录隐藏), `sort`
-- conversations: `id`, `model_id`(FK→models, CASCADE, **UNIQUE**),
-  `system_prompt`(联系人人设), `created_at`, `updated_at`
+- users: `id`, `user_id`(自定义唯一标识，如 `zhangsan`, **UNIQUE**), `display_name`,
+  `avatar_color`(可空), `created_at` —— 人人聊天的人联系人（自托管无登录，user_id 即身份）
+- conversations: `id`, `kind`(`bot`/`human`),
+  - bot 会话：`model_id`(FK→models, CASCADE, 部分唯一索引)
+  - human 会话：`peer_a_id`/`peer_b_id`(FK→users, 会话双方；两人之间唯一，部分唯一索引)
+  `system_prompt`(联系人人设，仅 bot), `created_at`, `updated_at`
 - messages: `id`, `conversation_id`(FK→conversations, CASCADE),
   `role`(user/assistant/system), `content`, `model_id`(可空),
-  `prompt_tokens`, `completion_tokens`, `duration_ms`, `error`(可空), `created_at`
+  `sender_user_id`(可空；human 会话的消息发送方), `prompt_tokens`, `completion_tokens`,
+  `duration_ms`, `error`(可空), `created_at`
 
 要点：
 
-- 模型即联系人：MVP 每个模型唯一一条会话线程（UNIQUE 约束）；
+- 模型即联系人：MVP 每个模型唯一一条会话线程（`model_id` 部分唯一索引）；
   "清空聊天记录" = 删除该会话下 messages（会话保留），上下文随之重置。
+- 人人会话：`(peer_a_id, peer_b_id)` 幂等——同一对用户只有一条会话，重复添加返回现有。
 - 联系人被删除：会话与消息级联删除；联系人停用：仅隐藏入口，数据保留。
-- P1 若要支持同一联系人多会话，解除 UNIQUE 约束即可，表结构不变。
+- 兼容迁移（init_db 时自动执行）：旧库无 `users`/`conversations.kind` 等列时，
+  SQLite `ALTER TABLE ADD COLUMN` 补齐并回填默认值，不丢已有服务商/消息。
 - 聊天不需要"选模型"：发消息的目标模型由联系人（会话）决定。
 
 ## 5. API 设计
@@ -130,9 +137,14 @@ REST（JSON，前缀 `/api`）：
 | GET / POST | /api/providers/{id}/models | 模型列表 / 添加联系人 |
 | PATCH / DELETE | /api/models/{id} | 启停 / 删除 |
 | GET | /api/models | 全部启用模型（通讯录用） |
-| GET | /api/conversations | 聊天列表：联系人信息 + 最后消息预览 + 时间，按最后消息倒序 |
-| POST | /api/conversations | 按 model_id 幂等创建（已存在则返回现有） |
-| GET | /api/conversations/{id}/messages | 历史消息 |
+| GET | /api/conversations | 聊天列表（人 + 机器人融合）：联系人信息 + 最后消息预览 + 时间，按最后消息倒序 |
+| POST | /api/conversations | 幂等创建：`{"kind":"bot","model_id":...}` 或 `{"kind":"human","peer_user_id":"..."}` |
+| GET | /api/conversations/{id}/messages | 历史消息（human 会话含 sender_user_id） |
+| GET / POST | /api/users | 按 user_id 搜索（加人用）/ 注册自己的身份 |
+| GET / PUT | /api/me | 当前身份（由请求头 X-User-Id 指定） |
+
+- 身份头：人人相关 REST 请求带 `X-User-Id: <user_id>`（MVP 无登录，服务端以此识别"我是谁"；
+  ws 握手 query 同参）。
 | PUT | /api/conversations/{id} | 更新人设（system_prompt） |
 | DELETE | /api/conversations/{id}/messages | 清空聊天记录 |
 
@@ -207,7 +219,14 @@ openai_compat.py：httpx AsyncClient 以流式 POST `{base_url}/chat/completions
 agent 类模板（hermes / dshweb，`agent=True`）：模型清单留空由用户添加；
 聊天链路按 agent 超时策略执行（见 §7），连接测试走对应适配器的最小请求。
 
-## 7. 流式与错误处理（对齐 AGENTS.md 三原则）
+## 7. 非功能需求（性能极致）
+
+- 性能极致：会话列表避免 N+1（最后消息一次查询）；高频查询建索引
+  （messages.conversation_id、conversations.peer_a/peer_b 等）；
+  ws 转发路径最短（落库 + 定向推送，不做多余加工）。
+- 流式首字延迟 ≈ 上游 API 延迟（后端纯转发，不做额外加工）。
+
+## 8. 流式与错误处理（对齐 AGENTS.md 三原则）
 
 - 正常一溜到底：chunk 到达即转发，后端不缓冲全文；落库失败不阻断聊天流。
 - 异常快速抛错：
@@ -223,14 +242,14 @@ agent 类模板（hermes / dshweb，`agent=True`）：模型清单留空由用�
 上下文策略：MVP 全量携带该联系人历史；超长由上游报错并按错误码提示，
 自动截断放 P1。
 
-## 8. 安全
+## 9. 安全
 
 - API Key 存服务端 SQLite；REST 响应一律脱敏（前 4 后 4，中间 `****`）。
 - Key 不写日志、不进错误消息；安卓端不缓存 Key，只持有后端地址（DataStore）。
 - MVP 后端无用户鉴权（前提：自有服务器、仅自己访问）；CORS 按需收紧。
 - 后端地址使用 HTTPS 域名（现有 Caddy 证书）；P2 多用户时再加鉴权。
 
-## 9. 测试策略
+## 10. 测试策略
 
 - 适配器层单测（核心）：respx mock 上游，覆盖正常流、分片 chunk、
   上游错误、超时、[DONE] 边界。
@@ -241,7 +260,7 @@ agent 类模板（hermes / dshweb，`agent=True`）：模型清单留空由用�
   UI 自动化放 P1。
 - 手工验收清单：按 pro.md §7，用真实 Key 实测 DeepSeek 与豆包。
 
-## 10. 运行与部署
+## 11. 运行与部署
 
 后端开发模式：
 
@@ -269,7 +288,7 @@ App 内填写后端地址（开发机局域网 IP:8000 或线上域名）。
 `CHAT_TIMEOUT_TOTAL`、`CHAT_TIMEOUT_AGENT_FIRST_TOKEN`（默认 300）、
 `CHAT_TIMEOUT_AGENT_TOTAL`（默认 3600）。不使用 .env 入库。
 
-## 11. 里程碑
+## 12. 里程碑
 
 - M1 后端骨架：DB + providers/models/conversations CRUD + 模板 + 单测
 - M2 聊天链路：/api/chat SSE 透传 + 错误码 + mock 全链路测试
