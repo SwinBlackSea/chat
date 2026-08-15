@@ -96,6 +96,7 @@ async def _handle_message(me_user_id: str, to_user_id: str, content: str) -> Non
             "message_id": message_id,
             "conversation_id": conv_id,
             "delivered": delivered,
+            "content": content,  # 携带内容：发送方按内容把乐观消息映射到真实 id（并发多条不串位）
         },
     )
 

@@ -23,7 +23,12 @@ sealed class WsEvent {
         val ts: String,
     ) : WsEvent()
 
-    data class Ack(val messageId: Int, val conversationId: Int, val delivered: Boolean) : WsEvent()
+    data class Ack(
+        val messageId: Int,
+        val conversationId: Int,
+        val delivered: Boolean,
+        val content: String? = null, // 后端携带原内容，发送方据此把乐观消息映射到真实 id
+    ) : WsEvent()
     data class Online(val userId: String, val online: Boolean) : WsEvent()
     data class Typing(val from: String) : WsEvent()
     data class Read(
@@ -121,6 +126,7 @@ object WsHub {
                     messageId = json.optInt("message_id"),
                     conversationId = json.optInt("conversation_id"),
                     delivered = json.optBoolean("delivered"),
+                    content = json.optString("content").takeIf { it.isNotEmpty() },
                 )
                 "online" -> {
                     val uid = json.optString("user_id")

@@ -61,7 +61,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -109,7 +111,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     var input by rememberSaveable { mutableStateOf("") }
     var screenError by remember { mutableStateOf<String?>(null) }
     var typingByPeer by remember { mutableStateOf(false) }
-    var loadedOnce by remember { mutableStateOf(false) }
+    var remoteLoaded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val isHuman = conv?.isHuman == true
@@ -120,14 +122,42 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             val convDeferred = async { api.conversation(conversationId) }
             val msgDeferred = async { api.messages(conversationId) }
             conv = convDeferred.await()
-            messages = msgDeferred.await().map {
+            val remote = msgDeferred.await().map {
                 UiMessage(
                     it.id.toString(), it.role, it.content, it.error,
                     it.senderUserId, it.createdAt, it.read,
                 )
             }
+            // 合并本地乐观消息：临时 key（h-/a-/u-）且内容尚未在服务端结果中的保留，
+            // 防止 reload 覆盖尚未确认的消息（并发互发时丢消息的根因）
+            val remoteKey = remote.map { it.key }.toSet()
+            val remoteSignature = remote.map { Triple(it.role, it.content, it.senderUserId) }.toSet()
+            val optimistic = messages.filter { m ->
+                (m.key.startsWith("h-") || m.key.startsWith("a-") || m.key.startsWith("u-")) &&
+                    m.key !in remoteKey &&
+                    Triple(m.role, m.content, m.senderUserId) !in remoteSignature
+            }
+            messages = remote + optimistic
         }
+        remoteLoaded = true // 服务端数据首次就绪标记（触发首次定位，独立于刷新协程生命周期）
         screenError = null
+    }
+
+    // 串行化刷新：同一会话并发触发 reload 时取消旧的，防"旧数据后完成覆盖新数据"
+    // （并发消息/回执乱序的根因之一）
+    val reloadJobHolder = remember { mutableListOf<Job?>(null) }
+    fun reloadAsync(errorPrefix: String = "刷新失败", then: (suspend () -> Unit)? = null) {
+        reloadJobHolder[0]?.cancel()
+        reloadJobHolder[0] = scope.launch {
+            try {
+                reload()
+                then?.invoke()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                screenError = "$errorPrefix：${e.message}"
+            }
+        }
     }
 
     // 人人会话：实时事件（对方消息/回执/typing/online）驱动刷新与提示
@@ -145,27 +175,31 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                     key, "user", event.content, null, event.from, event.ts,
                                 )
                             }
-                            scope.launch {
-                                try {
-                                    reload()
-                                    api.markRead(conversationId) // 正在看该会话，新消息即已读
-                                } catch (e: Exception) {
-                                    screenError = "刷新失败：${e.message}"
-                                }
-                            }
+                            // 正在看该会话 → 新消息即已读：与 reload 并行，互不阻塞
+                            // （reload 失败不丢已读上报）
+                            scope.launch { runCatching { api.markRead(conversationId) } }
+                            reloadAsync()
                         }
                     }
                 }
                 is WsEvent.Ack -> {
                     if (event.conversationId == conversationId) {
                         mainHandler.post {
-                            scope.launch {
-                                try {
-                                    reload()
-                                } catch (e: Exception) {
-                                    screenError = "刷新失败：${e.message}"
+                            // 乐观消息（h-/a- 临时 key）→ 服务端真实 id：
+                            // 按内容匹配第一条未确认的乐观消息，稳定映射（并发多条不串位）
+                            val content = event.content
+                            if (!content.isNullOrEmpty()) {
+                                val index = messages.indexOfFirst {
+                                    (it.key.startsWith("h-") || it.key.startsWith("a-")) &&
+                                        it.content == content
+                                }
+                                if (index >= 0) {
+                                    messages = messages.toMutableList().apply {
+                                        this[index] = this[index].copy(key = event.messageId.toString())
+                                    }
                                 }
                             }
+                            reloadAsync()
                         }
                     }
                 }
@@ -178,12 +212,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     }
                 }
                 is WsEvent.Read -> {
-                    // 对方已读回执：本地即时更新自己消息的已读状态（不整表 reload，避免重排抖动）
+                    // 对方已读回执：本地即时更新"自己发出去的消息"的已读状态
+                    // （不整表 reload，避免重排抖动）。senderUserId 必须是自己——
+                    // 之前误用 event.from 匹配导致永远不更新（已读回执不达的根因）
                     if (event.conversationId == conversationId) {
                         mainHandler.post {
                             messages = messages.map {
                                 val id = it.key.toIntOrNull()
-                                if (it.senderUserId == event.from && id != null && id <= event.lastReadMsgId) {
+                                if (it.senderUserId == Backend.userId && id != null && id <= event.lastReadMsgId) {
                                     it.copy(read = true)
                                 } else {
                                     it
@@ -197,13 +233,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     // （AI 会话跳过——AI 回答走独立 SSE 链路，不受 ws 重连影响，也避免打断流式渲染）
                     if (conv?.isHuman == true) {
                         mainHandler.post {
-                            scope.launch {
-                                try {
-                                    reload()
-                                } catch (e: Exception) {
-                                    screenError = "刷新失败：${e.message}"
-                                }
-                            }
+                            reloadAsync()
                         }
                     }
                 }
@@ -211,13 +241,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     // 对方换了头像：刷新会话拿到新头像 URL（URL 带 ?v= 版本，Avatar 自动重载）
                     if (event.userId == conv?.peerUserId) {
                         mainHandler.post {
-                            scope.launch {
-                                try {
-                                    reload()
-                                } catch (e: Exception) {
-                                    screenError = "刷新失败：${e.message}"
-                                }
-                            }
+                            reloadAsync()
                         }
                     }
                 }
@@ -229,36 +253,36 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     }
 
     LaunchedEffect(conversationId) {
-        try {
-            reload()
-        } catch (e: Exception) {
-            screenError = "加载失败：${e.message}"
+        // 初次加载：串行化（取消进行中的刷新，防旧数据覆盖），完成后标记已读
+        // （首次定位到底部由 reload() 内部完成，不受并发刷新取消影响）
+        reloadAsync("加载失败") {
+            try {
+                api.markRead(conversationId)
+            } catch (_: Exception) {
+            }
         }
-        // 进入会话即标记已读（清未读红点）
-        try {
-            api.markRead(conversationId)
-        } catch (_: Exception) {
+    }
+
+    // 首次定位到底部：由 remoteLoaded（服务端数据就绪）触发，独立于刷新协程生命周期，
+    // 不受并发 reload 取消影响（挂起 scrollToItem 等待布局完成，定位准确）
+    LaunchedEffect(remoteLoaded) {
+        if (remoteLoaded && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size - 1)
         }
-        if (messages.isNotEmpty()) listState.scrollToItem(messages.size - 1)
     }
 
     LaunchedEffect(listState) {
         snapshotFlow { messages.size }.distinctUntilChanged().collect { size ->
-            if (size > 0) {
-                if (!loadedOnce) {
-                    // 首次加载：瞬时定位到底部最新消息（不做滚动动画，避免进页抖动）
-                    loadedOnce = true
-                    listState.scrollToItem(size - 1)
-                } else {
-                    // 已有内容：仅当用户正贴住底部（最后可见项在末尾且底部贴近视口底）时
-                    // 才平滑跟随新消息；上滑阅读历史时不打扰（微信式行为）
-                    val info = listState.layoutInfo
-                    val last = info.visibleItemsInfo.lastOrNull()
-                    val atBottom = last != null &&
-                        last.index >= info.totalItemsCount - 3 &&
-                        last.offset + last.size >= info.viewportEndOffset - 60
-                    if (atBottom) listState.animateScrollToItem(size - 1)
-                }
+            // 仅在初次定位完成（remoteLoaded）后跟随新消息，避免与首次定位竞争
+            if (size > 0 && remoteLoaded) {
+                // 仅当用户正贴住底部（最后可见项在末尾且底部贴近视口底）时
+                // 才平滑跟随新消息；上滑阅读历史时不打扰（微信式行为）
+                val info = listState.layoutInfo
+                val last = info.visibleItemsInfo.lastOrNull()
+                val atBottom = last != null &&
+                    last.index >= info.totalItemsCount - 3 &&
+                    last.offset + last.size >= info.viewportEndOffset - 60
+                if (atBottom) listState.animateScrollToItem(size - 1)
             }
         }
     }
@@ -274,11 +298,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     LaunchedEffect(streaming) {
         if (!streaming && conv != null) {
             delay(150)
-            try {
-                reload()
-            } catch (e: Exception) {
-                screenError = "刷新失败：${e.message}"
-            }
+            reloadAsync()
         }
     }
 
@@ -329,13 +349,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         GlobalScope.launch {
                             runCatching { api.markRead(conversationId) }
                         }
-                        scope.launch {
-                            try {
-                                reload()
-                            } catch (e: Exception) {
-                                screenError = "刷新失败：${e.message}"
-                            }
-                        }
+                        reloadAsync()
                     }
                     is ChatEvent.Error -> {
                         messages = messages.map {
@@ -345,13 +359,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         GlobalScope.launch {
                             runCatching { api.markRead(conversationId) }
                         }
-                        scope.launch {
-                            try {
-                                reload()
-                            } catch (e: Exception) {
-                                screenError = "刷新失败：${e.message}"
-                            }
-                        }
+                        reloadAsync()
                     }
                 }
             }
@@ -530,11 +538,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     ChatGenerationTracker.stop(conversationId)
                     scope.launch {
                         delay(300)
-                        try {
-                            reload()
-                        } catch (e: Exception) {
-                            screenError = "刷新失败：${e.message}"
-                        }
+                        reloadAsync()
                     }
                 }) {
                     Text("■ 停止", color = WxRed, fontSize = 13.sp)
