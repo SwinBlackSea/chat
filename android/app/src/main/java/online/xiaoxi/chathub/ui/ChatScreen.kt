@@ -85,6 +85,7 @@ private data class UiMessage(
     val error: String?,
     val senderUserId: String? = null,
     val time: String? = null,
+    val read: Boolean = false,
 )
 
 @Composable
@@ -112,7 +113,10 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             val msgDeferred = async { api.messages(conversationId) }
             conv = convDeferred.await()
             messages = msgDeferred.await().map {
-                UiMessage(it.id.toString(), it.role, it.content, it.error, it.senderUserId, it.createdAt)
+                UiMessage(
+                    it.id.toString(), it.role, it.content, it.error,
+                    it.senderUserId, it.createdAt, it.read,
+                )
             }
         }
         screenError = null
@@ -329,7 +333,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 .fillMaxWidth()
                 .imePadding(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
                 val mine = if (isHuman) {
@@ -347,31 +351,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
-                // 连续消息分组（同发送方相邻）
-                val prevMine = if (index > 0) {
-                    isMine(messages[index - 1], isHuman)
-                } else {
-                    null
-                }
-                val nextMine = if (index < messages.lastIndex) {
-                    isMine(messages[index + 1], isHuman)
-                } else {
-                    null
-                }
-                val firstInGroup = prevMine != mine
-                val lastInGroup = nextMine != mine
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
                 ) {
-                    // 头像垂直居中于气泡（微信式），连续消息组内用占位保持对齐
+                    // 每条消息独立：头像垂直居中于气泡，间隔均匀（微信 A-B-A 一致）
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!mine) {
-                            if (firstInGroup) {
-                                Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
-                            } else {
-                                Spacer(Modifier.width(40.dp))
-                            }
+                            Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
                             Spacer(Modifier.width(10.dp))
                         }
                         Box(
@@ -379,7 +366,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 .widthIn(max = 250.dp)
                                 .background(
                                     if (mine) WxBubbleMe else Color.White,
-                                    bubbleShape(mine, firstInGroup, lastInGroup),
+                                    bubbleShape(mine),
                                 )
                                 .padding(horizontal = 12.dp, vertical = 9.dp),
                         ) {
@@ -401,39 +388,36 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         }
                         if (mine) {
                             Spacer(Modifier.width(10.dp))
-                            if (firstInGroup) {
-                                Avatar("我", null, size = 40.dp)
-                            } else {
-                                Spacer(Modifier.width(40.dp))
-                            }
+                            Avatar("我", null, size = 40.dp)
                         }
                     }
-                    if (lastInGroup) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (mine) {
-                                androidx.compose.foundation.layout.Arrangement.End
-                            } else {
-                                androidx.compose.foundation.layout.Arrangement.Start
-                            },
-                        ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (mine) {
+                            androidx.compose.foundation.layout.Arrangement.End
+                        } else {
+                            androidx.compose.foundation.layout.Arrangement.Start
+                        },
+                    ) {
+                        // 已读/未读状态（自己的消息，人人会话）
+                        if (mine && isHuman) {
+                            Text(
+                                if (msg.read) "已读" else "未读",
+                                color = if (msg.read) WxGreen else WxText3,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                        val lastUser = messages.take(index).lastOrNull { it.role == "user" }
+                        val isLastAssistant = msg.role == "assistant" &&
+                            index == messages.indexOfLast { it.role == "assistant" }
+                        if (isLastAssistant && lastUser != null && !streaming) {
                             TextButton(
-                                onClick = { clipboard.setText(AnnotatedString(msg.content)) },
-                                enabled = msg.content.isNotEmpty(),
+                                onClick = {
+                                    send(regenerate = true, regenerateContent = lastUser.content)
+                                },
                             ) {
-                                Text("复制", color = WxText2, fontSize = 12.sp)
-                            }
-                            val lastUser = messages.take(index).lastOrNull { it.role == "user" }
-                            val isLastAssistant = msg.role == "assistant" &&
-                                index == messages.indexOfLast { it.role == "assistant" }
-                            if (isLastAssistant && lastUser != null && !streaming) {
-                                TextButton(
-                                    onClick = {
-                                        send(regenerate = true, regenerateContent = lastUser.content)
-                                    },
-                                ) {
-                                    Text("重新生成", color = WxText2, fontSize = 12.sp)
-                                }
+                                Text("重新生成", color = WxText2, fontSize = 12.sp)
                             }
                         }
                     }
@@ -523,23 +507,13 @@ private fun shouldShowTimeDivider(prev: UiMessage?, curr: UiMessage): Boolean {
     }
 }
 
-/** 微信式气泡圆角：尾巴角 4dp，其余 12dp；连续消息组内全圆角。 */
-private fun bubbleShape(mine: Boolean, firstInGroup: Boolean, lastInGroup: Boolean): RoundedCornerShape {
+/** 独立气泡圆角：自己右下尾巴角 4dp、对方左下尾巴角 4dp，其余 12dp。 */
+private fun bubbleShape(mine: Boolean): RoundedCornerShape {
     val small = 4.dp
     val large = 12.dp
     return if (mine) {
-        when {
-            firstInGroup && lastInGroup -> RoundedCornerShape(large, small, small, large)
-            firstInGroup -> RoundedCornerShape(large, small, large, large)
-            lastInGroup -> RoundedCornerShape(large, large, small, large)
-            else -> RoundedCornerShape(large)
-        }
+        RoundedCornerShape(large, small, small, large)
     } else {
-        when {
-            firstInGroup && lastInGroup -> RoundedCornerShape(small, large, large, small)
-            firstInGroup -> RoundedCornerShape(small, large, large, large)
-            lastInGroup -> RoundedCornerShape(large, large, large, small)
-            else -> RoundedCornerShape(large)
-        }
+        RoundedCornerShape(small, large, large, small)
     }
 }
