@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -112,11 +111,12 @@ fun ChatListScreen(
     LaunchedEffect(activeConversations) {
         if (loaded) load()
     }
-    // 实时通道新消息/回执到达 → 刷新列表
+    // 实时通道新消息/回执到达 → 刷新列表；ws 断线重连后服务端发 sync → 补齐离线期间错过的消息
     DisposableEffect(Unit) {
         val listener: (WsEvent) -> Unit = { event ->
-            if (event is WsEvent.Message || event is WsEvent.Ack) {
-                mainHandler.post { load() }
+            when (event) {
+                is WsEvent.Message, is WsEvent.Ack, is WsEvent.Sync -> mainHandler.post { load() }
+                else -> Unit
             }
         }
         WsHub.addListener(listener)
@@ -146,7 +146,6 @@ fun ChatListScreen(
         ) {
             Text("ChatHub", fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = onAddContact) { Icon(Icons.Filled.Add, contentDescription = "添加联系人") }
-            IconButton(onClick = { load() }) { Icon(Icons.Filled.Refresh, contentDescription = "刷新") }
         }
         when {
             error != null -> Text(
@@ -190,7 +189,7 @@ fun ChatListScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box {
-                            Avatar(conv.contactName, conv.avatarColor, size = 48.dp, onClick = { onOpenInfo(conv.id) })
+                            Avatar(conv.contactName, conv.avatarColor, size = 48.dp, onClick = { onOpenInfo(conv.id) }, imageUrl = conv.avatar)
                             // 微信式未读红点（数字角标，头像右上角）
                             if (conv.unreadCount > 0) {
                                 Badge(

@@ -180,6 +180,21 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         }
                     }
                 }
+                is WsEvent.Sync -> {
+                    // ws 断线重连后服务端发 sync：人人会话补齐离线期间错过的消息
+                    // （AI 会话跳过——AI 回答走独立 SSE 链路，不受 ws 重连影响，也避免打断流式渲染）
+                    if (conv?.isHuman == true) {
+                        mainHandler.post {
+                            scope.launch {
+                                try {
+                                    reload()
+                                } catch (e: Exception) {
+                                    screenError = "刷新失败：${e.message}"
+                                }
+                            }
+                        }
+                    }
+                }
                 else -> Unit
             }
         }
@@ -278,6 +293,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         scope.launch {
                             try {
                                 reload()
+                                api.markRead(conversationId) // 回复已完成且在看 → 推进已读进度
                             } catch (e: Exception) {
                                 screenError = "刷新失败：${e.message}"
                             }
@@ -291,6 +307,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         scope.launch {
                             try {
                                 reload()
+                                api.markRead(conversationId)
                             } catch (e: Exception) {
                                 screenError = "刷新失败：${e.message}"
                             }
@@ -382,7 +399,13 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     // 每条消息独立：头像垂直居中于气泡，间隔均匀（微信 A-B-A 一致）
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!mine) {
-                            Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp, onClick = onInfo)
+                            Avatar(
+                                conv?.contactName ?: "A",
+                                conv?.avatarColor,
+                                size = 40.dp,
+                                onClick = onInfo,
+                                imageUrl = if (isHuman) conv?.avatar else null,
+                            )
                             Spacer(Modifier.width(10.dp))
                         }
                         // 已读/未读：自己的消息显示在气泡左侧小字（未读强调色、已读灰）
@@ -443,7 +466,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         }
                         if (mine) {
                             Spacer(Modifier.width(10.dp))
-                            Avatar("我", null, size = 40.dp)
+                            Avatar("我", null, size = 40.dp, imageUrl = Backend.myAvatar)
                         }
                     }
                 }
