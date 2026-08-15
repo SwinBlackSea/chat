@@ -253,18 +253,23 @@ fun ChatListScreen(
     }
 }
 
-/** 微信式未读红点：红底白字数字（定位由调用方 modifier 提供）。 */
+/** 未读红点：标准圆形（宽高相等），数字完整显示，>99 显示 99+。 */
 @Composable
 private fun Badge(count: Int, modifier: Modifier = Modifier) {
     val text = if (count > 99) "99+" else count.toString()
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
+            .size(20.dp)
             .clip(CircleShape)
-            .background(WxRed)
-            .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
-            .padding(horizontal = 5.dp, vertical = 1.dp),
+            .background(WxRed),
     ) {
-        Text(text, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            text,
+            color = Color.White,
+            fontSize = if (count > 99) 8.sp else 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
