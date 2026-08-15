@@ -468,10 +468,10 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color(0xFFF2F2F7),
+                    unfocusedContainerColor = Color(0xFFF2F2F7),
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                 ),
@@ -480,16 +480,16 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 keyboardActions = KeyboardActions(onSend = { if (isHuman) sendHuman() else send() }),
                 maxLines = 4,
             )
-            Spacer(Modifier.width(8.dp))
-            Button(
+            Spacer(Modifier.width(4.dp))
+            TextButton(
                 onClick = { if (isHuman) sendHuman() else send() },
                 enabled = input.isNotBlank() && !streaming,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = WxGreen,
-                    disabledContainerColor = WxLineStrong,
-                ),
             ) {
-                Text("发送")
+                Text(
+                    "发送",
+                    fontSize = 15.sp,
+                    color = if (input.isNotBlank() && !streaming) Accent else WxText3,
+                )
             }
         }
     }
@@ -511,9 +511,9 @@ private fun shouldShowTimeDivider(prev: UiMessage?, curr: UiMessage): Boolean {
     }
 }
 
-/** 独立气泡圆角：自己右下尾巴角 4dp、对方左下尾巴角 4dp，其余 12dp。 */
+/** 独立气泡圆角：尖角 8dp 朝说话者一侧，其余 12dp（skill 规范）。 */
 private fun bubbleShape(mine: Boolean): RoundedCornerShape {
-    val small = 4.dp
+    val small = 8.dp
     val large = 12.dp
     return if (mine) {
         RoundedCornerShape(large, small, small, large)

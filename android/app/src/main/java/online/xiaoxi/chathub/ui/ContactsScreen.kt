@@ -1,6 +1,7 @@
 package online.xiaoxi.chathub.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -38,7 +41,7 @@ import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ModelDto
 import online.xiaoxi.chathub.data.UiCache
 import online.xiaoxi.chathub.data.WsHub
-import online.xiaoxi.chathub.theme.WxGreen
+import online.xiaoxi.chathub.theme.OnlineGreen
 import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
@@ -139,13 +142,16 @@ fun ContactsScreen(
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(conv.contactName, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                Spacer(Modifier.width(6.dp))
                                 val online = conv.peerUserId in onlineUsers
-                                Text(
-                                    if (online) "在线" else "离线",
-                                    fontSize = 11.sp,
-                                    color = if (online) WxGreen else WxText3,
-                                )
+                                if (online) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Box(
+                                        Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(OnlineGreen),
+                                    )
+                                }
                             }
                             Text(conv.modelCode, fontSize = 12.sp, color = WxText3)
                         }

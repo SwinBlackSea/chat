@@ -15,12 +15,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -54,6 +58,7 @@ import online.xiaoxi.chathub.data.UiCache
 import online.xiaoxi.chathub.data.WsEvent
 import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.theme.WxLine
+import online.xiaoxi.chathub.theme.Accent
 import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
@@ -150,10 +155,29 @@ fun ChatListScreen(
                 modifier = Modifier.padding(16.dp),
             )
             !loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("加载中…", color = WxText3, fontSize = 14.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Accent,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("加载中…", color = WxText3, fontSize = 14.sp)
+                }
             }
             items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("还没有对话，去通讯录选一位联系人，或点右上角 + 加人", color = WxText2, fontSize = 14.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Outlined.Forum,
+                        contentDescription = null,
+                        tint = WxText3,
+                        modifier = Modifier.size(40.dp),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("还没有对话", color = WxText2, fontSize = 14.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text("去通讯录选一位联系人，或点右上角 + 加人", color = WxText3, fontSize = 12.sp)
+                }
             }
             else -> LazyColumn {
                 itemsIndexed(items) { index, conv ->
