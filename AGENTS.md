@@ -51,6 +51,16 @@ ChatHub：微信式交互的 AI 模型聚合聊天安卓客户端——每个模
 
 - 提交信息用祈使句，说清动机；按里程碑粒度提交（见 tech.md §11）。
 
+## 版本号规则（每次发版构建 APK 必须执行）
+
+- 每次构建发布 APK（`android/app/build.gradle.kts` 的 versionCode/versionName）必须递增：
+  - `versionCode`：每次发版 +1（整数，单调递增，供系统识别新版本）
+  - `versionName`：语义化版本（`major.minor.patch`），按变更类型升级：
+    - bugfix → patch +1（如 0.1.0 → 0.1.1）
+    - 新功能 → minor +1（如 0.1.0 → 0.2.0）
+    - 重大不兼容/重构 → major +1
+  - 不得重复使用已发布的版本号；构建前先 `git log`/查库确认当前版本，构建后装机验证并在提交信息中写明新版本号。
+
 ## UI 设计规范（Codex 风格：舒服、简洁、克制）
 
 **所有界面改动必须先加载 `frontend-design` skill 并按其设计系统执行、完成后逐项自查。**
