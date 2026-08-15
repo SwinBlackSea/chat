@@ -301,7 +301,13 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(WxChatBackground).statusBarsPadding()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(WxChatBackground)
+            .statusBarsPadding()
+            .imePadding(),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -349,8 +355,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             state = listState,
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .imePadding(),
+                .fillMaxWidth(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
         ) {
