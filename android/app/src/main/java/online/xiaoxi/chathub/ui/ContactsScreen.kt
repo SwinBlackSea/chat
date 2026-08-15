@@ -32,7 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
+import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ModelDto
+import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
 
@@ -40,6 +42,7 @@ import online.xiaoxi.chathub.theme.WxText3
 fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
+    var humans by remember { mutableStateOf<List<ConversationDto>>(emptyList()) }
     var groups by remember { mutableStateOf<List<Pair<String, List<ModelDto>>>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
@@ -47,6 +50,10 @@ fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
     fun load() {
         scope.launch {
             try {
+                // 人：我参与的 human 会话（对方即联系人）
+                val convs = api.conversations()
+                humans = convs.filter { it.isHuman }
+                // 模型：按服务商分组
                 val models = api.enabledModels()
                 groups = models.groupBy { it.providerName.ifEmpty { "其他" } }.toList()
                 error = null
@@ -87,9 +94,40 @@ fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
         if (error != null) {
-            Text(error!!, color = online.xiaoxi.chathub.theme.WxRed, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+            Text(error!!, color = WxRed, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
         }
         LazyColumn {
+            if (humans.isNotEmpty()) {
+                item {
+                    Text(
+                        "联系人",
+                        fontSize = 14.sp,
+                        color = WxText2,
+                        modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 8.dp),
+                    )
+                }
+                items(humans) { conv ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpen(conv.id) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Avatar(conv.contactName, conv.avatarColor, size = 40.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(conv.contactName, fontSize = 16.sp)
+                            Text(conv.modelCode, fontSize = 12.sp, color = WxText3)
+                        }
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = WxText3,
+                        )
+                    }
+                }
+            }
             groups.forEach { (provider, models) ->
                 item {
                     Text(

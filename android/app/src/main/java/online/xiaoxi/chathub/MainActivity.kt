@@ -22,6 +22,7 @@ import online.xiaoxi.chathub.ui.AddProviderScreen
 import online.xiaoxi.chathub.ui.ChatScreen
 import online.xiaoxi.chathub.ui.ContactInfoScreen
 import online.xiaoxi.chathub.ui.MainScreen
+import online.xiaoxi.chathub.ui.ProvidersScreen
 import online.xiaoxi.chathub.ui.SetupScreen
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +61,7 @@ fun AppRoot(store: SettingsStore) {
                 onOpenConversation = { id -> nav.navigate("chat/$id") },
                 onAddProvider = { nav.navigate("addprovider") },
                 onAddContact = { nav.navigate("addcontact") },
+                onOpenProviders = { nav.navigate("providers") },
                 settingsStore = store,
             )
         }
@@ -81,6 +83,15 @@ fun AppRoot(store: SettingsStore) {
         }
         composable("addprovider") {
             AddProviderScreen(onBack = { nav.popBackStack() })
+        }
+        composable("providers") {
+            ProvidersScreen(
+                onBack = { nav.popBackStack() },
+                onAddProvider = {
+                    nav.popBackStack()
+                    nav.navigate("addprovider")
+                },
+            )
         }
         composable("addcontact") {
             AddContactScreen(
