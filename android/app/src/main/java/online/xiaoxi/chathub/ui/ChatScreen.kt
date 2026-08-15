@@ -333,7 +333,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 .fillMaxWidth()
                 .imePadding(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
                 val mine = if (isHuman) {
@@ -370,7 +370,9 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 )
                                 .padding(horizontal = 12.dp, vertical = 9.dp),
                         ) {
-                            Column {
+                            Column(
+                                horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+                            ) {
                                 if (msg.content.isNotEmpty()) {
                                     MessageContent(msg.content, WxText)
                                 }
@@ -384,41 +386,36 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 if (msg.content.isEmpty() && msg.error == null) {
                                     Text("…", color = WxText3, fontSize = 14.sp)
                                 }
+                                // 已读/未读状态收进气泡内（不占额外行，保证相邻气泡间距一致）
+                                if (mine && isHuman) {
+                                    Text(
+                                        if (msg.read) "已读" else "未读",
+                                        color = if (msg.read) WxGreen else WxText3,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
+                                // 重新生成收进气泡内（bot 最后一条回答）
+                                val lastUser = messages.take(index).lastOrNull { it.role == "user" }
+                                val isLastAssistant = msg.role == "assistant" &&
+                                    index == messages.indexOfLast { it.role == "assistant" }
+                                if (isLastAssistant && lastUser != null && !streaming) {
+                                    Text(
+                                        "重新生成",
+                                        color = WxText2,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier
+                                            .padding(top = 4.dp)
+                                            .clickable {
+                                                send(regenerate = true, regenerateContent = lastUser.content)
+                                            },
+                                    )
+                                }
                             }
                         }
                         if (mine) {
                             Spacer(Modifier.width(10.dp))
                             Avatar("我", null, size = 40.dp)
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (mine) {
-                            androidx.compose.foundation.layout.Arrangement.End
-                        } else {
-                            androidx.compose.foundation.layout.Arrangement.Start
-                        },
-                    ) {
-                        // 已读/未读状态（自己的消息，人人会话）
-                        if (mine && isHuman) {
-                            Text(
-                                if (msg.read) "已读" else "未读",
-                                color = if (msg.read) WxGreen else WxText3,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            )
-                        }
-                        val lastUser = messages.take(index).lastOrNull { it.role == "user" }
-                        val isLastAssistant = msg.role == "assistant" &&
-                            index == messages.indexOfLast { it.role == "assistant" }
-                        if (isLastAssistant && lastUser != null && !streaming) {
-                            TextButton(
-                                onClick = {
-                                    send(regenerate = true, regenerateContent = lastUser.content)
-                                },
-                            ) {
-                                Text("重新生成", color = WxText2, fontSize = 12.sp)
-                            }
                         }
                     }
                 }
