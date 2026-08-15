@@ -165,6 +165,20 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         }
                     }
                 }
+                is WsEvent.Read -> {
+                    // 对方已读回执：刷新当前会话，更新自己消息的已读状态
+                    if (event.conversationId == conversationId) {
+                        mainHandler.post {
+                            scope.launch {
+                                try {
+                                    reload()
+                                } catch (e: Exception) {
+                                    screenError = "刷新失败：${e.message}"
+                                }
+                            }
+                        }
+                    }
+                }
                 else -> Unit
             }
         }

@@ -12,6 +12,7 @@ from ..schemas import (
     MessageOut,
 )
 from ..services.human import get_or_create_human_conversation
+from ..services.ws import manager
 
 router = APIRouter(prefix="/api")
 
@@ -280,6 +281,21 @@ async def mark_read(
     else:
         existing.last_read_msg_id = latest_id
     await session.commit()
+    # 已读回执：经 WS 推送给会话对方（human 会话），对方端据此刷新已读状态
+    if conv.kind == "human":
+        peer_id = conv.peer_a_id if conv.peer_a_id != me.id else conv.peer_b_id
+        if peer_id is not None:
+            peer = await session.get(User, peer_id)
+            if peer is not None:
+                await manager.send_to(
+                    peer.user_id,
+                    {
+                        "type": "read",
+                        "from": me.user_id,
+                        "conversation_id": conversation_id,
+                        "last_read_msg_id": latest_id,
+                    },
+                )
     return {"ok": True}
 
 
