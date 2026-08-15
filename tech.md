@@ -127,6 +127,10 @@ chat/
 - 联系人被删除：会话与消息级联删除；联系人停用：仅隐藏入口，数据保留。
 - 未读计数：bot 会话只数 `role='assistant'` 的消息（用户自己的消息 sender 同为 NULL，
   按 role 排除）；human 会话只数对方消息（`sender_user_id != 我`）。
+- 气泡分列（human 会话）：消息按 `sender_user_id == 请求头 X-User-Id` 判定"自己/对方"，
+  右侧为自己、左侧为对方。历史 bug：早期版本按 `role='user'` 无条件判右侧，
+  导致对方消息也显示在自己一侧（realme 旧版反馈"右侧是对方"）；9ab62b1 起改为 sender 比较，
+  0.1.1 及以后版本均正确。
 - 兼容迁移（init_db 时自动执行）：旧库无 `users.avatar`/`conversations.kind` 等列时，
   SQLite `ALTER TABLE ADD COLUMN` 补齐并回填默认值，不丢已有服务商/消息。
 - 聊天不需要"选模型"：发消息的目标模型由联系人（会话）决定。
