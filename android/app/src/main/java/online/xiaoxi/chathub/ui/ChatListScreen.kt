@@ -32,7 +32,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,7 +51,7 @@ import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
 
 @Composable
-fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit) {
+fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit, visible: Boolean = true) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -71,6 +73,10 @@ fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit) {
         }
     }
     LaunchedEffect(Unit) { load() }
+    // 切换回本 Tab 时静默刷新（不阻塞显示缓存）
+    LaunchedEffect(visible) {
+        if (visible && loaded) load()
+    }
     LaunchedEffect(activeConversations) {
         if (loaded) load()
     }
@@ -85,7 +91,23 @@ fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit) {
         onDispose { WsHub.removeListener(listener) }
     }
 
-    Column(Modifier.fillMaxSize().background(Color.White)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .alpha(if (visible) 1f else 0f)
+            .pointerInput(visible) {
+                // 隐藏时消费所有触摸事件，避免挡住下层页面
+                if (!visible) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            },
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,

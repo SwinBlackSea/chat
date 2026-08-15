@@ -60,12 +60,11 @@ fun MainScreen(
             }
         },
     ) { padding ->
+        // 三个 Tab 常驻组合：切换只改可见性，不重建不重新请求（瞬时切换）
         Box(Modifier.padding(padding)) {
-            when (tab) {
-                0 -> ChatListScreen(onOpenConversation, onAddContact)
-                1 -> ContactsScreen(onOpenConversation)
-                else -> SettingsScreen(onAddProvider, settingsStore)
-            }
+            ChatListScreen(onOpenConversation, onAddContact, visible = tab == 0)
+            ContactsScreen(onOpenConversation, visible = tab == 1)
+            SettingsScreen(onAddProvider, settingsStore, visible = tab == 2)
         }
     }
 }

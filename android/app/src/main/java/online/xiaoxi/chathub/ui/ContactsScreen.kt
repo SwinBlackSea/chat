@@ -24,7 +24,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,13 +37,14 @@ import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
 
 @Composable
-fun ContactsScreen(onOpen: (Int) -> Unit) {
+fun ContactsScreen(onOpen: (Int) -> Unit, visible: Boolean = true) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
     var groups by remember { mutableStateOf<List<Pair<String, List<ModelDto>>>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var loaded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    fun load() {
         scope.launch {
             try {
                 val models = api.enabledModels()
@@ -49,11 +52,34 @@ fun ContactsScreen(onOpen: (Int) -> Unit) {
                 error = null
             } catch (e: Exception) {
                 error = "加载失败：${e.message}"
+            } finally {
+                loaded = true
             }
         }
     }
+    LaunchedEffect(Unit) { load() }
+    // 切换回本 Tab 时静默刷新（不阻塞显示缓存）
+    LaunchedEffect(visible) {
+        if (visible && loaded) load()
+    }
 
-    Column(Modifier.fillMaxSize().background(Color.White)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .alpha(if (visible) 1f else 0f)
+            .pointerInput(visible) {
+                // 隐藏时消费所有触摸事件，避免挡住下层页面
+                if (!visible) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            },
+    ) {
         Text(
             "联系人",
             fontSize = 19.sp,
