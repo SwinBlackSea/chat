@@ -6,10 +6,11 @@
 
 ```
 安卓客户端 (Kotlin + Jetpack Compose)
-   │  REST(JSON) + 聊天流(POST → SSE)，OkHttp
+   │  REST(JSON) + 聊天流(POST → SSE) + 实时通道(WebSocket /api/ws)，OkHttp
 后端 (FastAPI, async)
    ├── REST API：providers / models / conversations / messages
-   ├── Chat 服务：组装上下文 → 调适配器 → 流式转发 → 落库
+   ├── Chat 服务：组装上下文 → 调适配器 → 流式转发 → 落库（SSE，AI 链路）
+   ├── WS 实时通道：连接管理 + 消息转发 / 心跳（人人通信，独立于 SSE）
    └── Provider 适配层（统一接口）
         ├── OpenAI 兼容客户端（主干，覆盖所有 OpenAI 兼容服务商，含 Hermes）
         └── dshweb RPC 适配器（session.prompt + 轮询，非 OpenAI 兼容）
@@ -29,6 +30,9 @@
 - 聊天链路为 SSE 透传：安卓端 POST → 后端用 httpx 流式请求上游 → 逐 chunk
   解析并 yield → 安卓端逐行解析 SSE。后端不缓冲全文（dshweb 无流式，
   最终回复按小块 yield 模拟打字机）。
+- **两条独立通道**：AI 流式固定走 SSE（POST /api/chat，请求-响应式、单向）；
+  人人通信的实时推送走 WebSocket（/api/ws，常驻双向）。互不混用，
+  AI 链路不受实时通道影响（见 §5.1 协议）。
 - 模型即联系人：一个模型（联系人）在 MVP 中对应唯一一条会话线程
   （conversations.model_id UNIQUE），上下文互不串扰。
 
@@ -57,9 +61,11 @@ chat/
 │   │   ├── api/
 │   │   │   ├── providers.py     # 服务商 + 模型管理 + 连接测试
 │   │   │   ├── conversations.py # 聊天列表 / 会话 / 消息 / 清空记录
-│   │   │   └── chat.py          # POST /api/chat（SSE）
+│   │   │   ├── chat.py          # POST /api/chat（SSE）
+│   │   │   └── ws.py            # /api/ws WebSocket 实时通道（独立于 SSE）
 │   │   ├── services/
-│   │   │   └── chat.py          # 上下文组装、消息落库
+│   │   │   ├── chat.py          # 上下文组装、消息落库
+│   │   │   └── ws.py            # 连接管理器（注册/推送/广播/清理）
 │   │   └── providers/
 │   │       ├── base.py          # 适配器接口 + 事件类型 + 错误码
 │   │       ├── openai_compat.py # OpenAI 兼容客户端（主干实现，含 Hermes）
@@ -147,6 +153,23 @@ event: error   data: {"code": "bad_key", "message": "API Key 无效"}
   done 时整体落库（含 usage/耗时）；error 时也落一条带 error 字段的 assistant 消息。
 - 重新生成 = 安卓端重发最后一条 user 内容，替换上一条 assistant 消息，无额外接口。
 - 客户端中断：安卓端 cancel OkHttp call → FastAPI 检测断连 → 取消上游请求。
+
+### 5.1 WebSocket 实时通道（人人通信，独立于 AI SSE 链路）
+
+连接：`ws://<host>/api/ws?client_id=<用户标识>`（MVP 无用户体系，握手自报身份；
+后续接入 users 表后改为鉴权后从会话推导）。消息为 JSON 文本帧：
+
+| 方向 | 类型 | payload | 说明 |
+| --- | --- | --- | --- |
+| 上行 | ping | `{}` | 心跳，服务端回 `{"type":"pong"}` |
+| 上行 | message | `{"to":"<client_id>","content":"..."}` | 发给指定用户 |
+| 下行 | message | `{"from":"<client_id>","content":"..."}` | 服务端转发给接收方全部在线连接 |
+| 下行 | error | `{"code":"offline"\|"bad_request","message":"..."}` | 对方不在线 / 请求非法 |
+
+- 连接管理（services/ws.py）：内存注册表 `client_id → 连接集合`（多端在线全送达），
+  断线自动清理；发送失败即剔除该连接。
+- 通道独立：不碰 /api/chat、不碰 providers 适配层；AI 流式仍走 SSE。
+- 后续演进（不在本轮）：users/会话成员表、消息落库、离线补推、在线状态事件、已读回执。
 
 ## 6. Provider 适配层
 

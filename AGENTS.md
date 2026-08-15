@@ -24,7 +24,8 @@ ChatHub：微信式交互的 AI 模型聚合聊天安卓客户端——每个模
 - 所有上游模型调用必须经过 `backend/app/providers/` 适配层，
   禁止在 API 层/客户端硬编码任何服务商 URL 或协议细节。
 - 新服务商优先走 OpenAI 兼容模板（templates.py）；确不兼容才新增独立适配器。
-- 流式输出统一 SSE（POST /api/chat）；不引入 WebSocket。
+- AI 聊天流式输出统一 SSE（POST /api/chat）；实时消息推送用 WebSocket（/api/ws），
+  两者通道独立、互不依赖（人人通信不混入 AI 流式链路）。
 - 聊天链路（上下文组装、消息落库、调上游）只走 services 层；
   服务商/会话的简单 CRUD 可在 API 层直接完成。
 - 安卓端所有后端调用收敛在 `data/ApiClient.kt`，SSE 解析只在 `data/SseParser.kt`；
