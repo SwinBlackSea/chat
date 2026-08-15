@@ -92,10 +92,12 @@ fun ContactsScreen(
     LaunchedEffect(visible) {
         if (visible && loaded) load()
     }
-    // 实时通道：对方换头像/新消息 → 刷新（头像与会话列表同步更新）
+    // 实时通道：对方换头像/新消息 → 刷新；ws 断线重连 sync → 补齐离线期间错过的头像/会话变化
     DisposableEffect(Unit) {
         val listener: (WsEvent) -> Unit = { event ->
-            if (event is WsEvent.Avatar || event is WsEvent.Message || event is WsEvent.Ack) {
+            if (event is WsEvent.Avatar || event is WsEvent.Message ||
+                event is WsEvent.Ack || event is WsEvent.Sync
+            ) {
                 mainHandler.post { load() }
             }
         }

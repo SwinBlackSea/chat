@@ -21,6 +21,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
+import online.xiaoxi.chathub.data.AvatarLoader
 import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.SettingsStore
 import online.xiaoxi.chathub.data.WsHub
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // 折叠屏/Android 15 正确适配状态栏与手势区
+        AvatarLoader.init(this) // 头像磁盘缓存目录
         val store = SettingsStore(applicationContext)
         setContent {
             ChatHubTheme {

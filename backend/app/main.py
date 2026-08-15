@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .api import chat, conversations, providers, users, ws
 from .config import settings
@@ -27,7 +27,21 @@ app.include_router(conversations.router)
 app.include_router(chat.router)
 app.include_router(users.router)
 app.include_router(ws.router)
-app.mount("/avatars", StaticFiles(directory=_avatars_dir), name="avatars")
+
+
+@app.api_route("/avatars/{name}", methods=["GET", "HEAD"], include_in_schema=False)
+async def avatar_file(name: str):
+    """头像文件：URL 带 ?v=<mtime_ns> 版本（换头像即新文件新 URL），
+    文件内容不变的 URL 可安全长期缓存，因此返回 immutable 一年缓存；
+    换头像后新 URL 会重新拉取，不存在缓存旧图问题。"""
+    filename = Path(name).name  # 只取文件名，防路径穿越
+    path = _avatars_dir / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="头像不存在")
+    return FileResponse(
+        path,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.get("/api/health")

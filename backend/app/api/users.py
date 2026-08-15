@@ -27,16 +27,16 @@ def avatars_dir() -> Path:
 
 
 def avatar_url(filename: str | None) -> str | None:
-    """头像 URL：/avatars/<file>?v=<文件修改时间>。
+    """头像 URL：/avatars/<file>?v=<文件修改时间(纳秒)>。
 
-    v 是文件 mtime（秒），换头像即新文件新 mtime → URL 必变，
-    客户端按 URL 的内存缓存/HTTP 缓存自动失效，避免显示旧头像。
+    v 取文件 mtime 纳秒，每次响应实时 stat，无服务端缓存；
+    换头像即新文件新 mtime → URL 必变，客户端按 URL 的内存缓存自动失效。
     """
     if not filename:
         return None
     path = avatars_dir() / Path(filename).name
     try:
-        version = int(path.stat().st_mtime)
+        version = path.stat().st_mtime_ns
     except OSError:
         version = 0
     return f"/avatars/{filename}?v={version}"

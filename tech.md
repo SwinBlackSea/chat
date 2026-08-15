@@ -153,8 +153,12 @@ REST（JSON，前缀 `/api`）：
 | POST | /api/me/avatar | multipart 上传我的头像（JPG/PNG/WebP，≤5MB，魔数校验），存 data/avatars/，返回 avatar URL；成功后经 ws 广播 avatar 事件给全部 human 会话对方 |
 | GET | /avatars/{file} | 头像静态文件（FastAPI StaticFiles 挂载） |
 
-- 头像 URL 带版本参数：`/avatars/<file>?v=<文件 mtime 秒>`——换头像即新文件新 mtime，
-  URL 必变，客户端按 URL 的内存缓存自动失效（AvatarLoader LRU + 上传后 clearAll 兜底）。
+- 头像 URL 带版本参数：`/avatars/<file>?v=<文件 mtime 纳秒>`——换头像即新文件新 mtime，
+  URL 必变，客户端按 URL 的内存缓存自动失效（AvatarLoader 内存 LRU + OkHttp 磁盘缓存，
+  上传后 clearAll 兜底）。
+- 头像静态服务（GET/HEAD /avatars/{name}）：返回
+  `Cache-Control: public, max-age=31536000, immutable`——URL 带版本，内容不变的 URL
+  可安全长期缓存；换头像新 URL 才重拉。文件名只取 basename，防路径穿越。
 
 - 身份头：人人相关 REST 请求带 `X-User-Id: <user_id>`（MVP 无登录，服务端以此识别"我是谁"；
   ws 握手 query 同参）。
@@ -176,7 +180,8 @@ event: error   data: {"code": "bad_key", "message": "API Key 无效"}
 
 - 语义：收到请求即把 user 消息落库 → 流式调上游 → assistant 消息边收边拼，
   done 时整体落库（含 usage/耗时）；error 时也落一条带 error 字段的 assistant 消息。
-- 重新生成 = 安卓端重发最后一条 user 内容，替换上一条 assistant 消息，无额外接口。
+- 时间：后端一律存 UTC（datetime.now(timezone.utc)，naive 序列化）；安卓端
+  formatWhen 按 UTC 解析并转 Asia/Shanghai 展示（列表时间、聊天时间线、消息时间一致）。
 - 客户端中断：安卓端 cancel OkHttp call → FastAPI 检测断连 → 取消上游请求。
 
 ### 5.1 WebSocket 实时通道（人人通信，独立于 AI SSE 链路）
