@@ -2,6 +2,7 @@ package online.xiaoxi.chathub
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +34,7 @@ import online.xiaoxi.chathub.ui.SetupScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge() // 折叠屏/Android 15 正确适配状态栏与手势区
         val store = SettingsStore(applicationContext)
         setContent {
             ChatHubTheme {

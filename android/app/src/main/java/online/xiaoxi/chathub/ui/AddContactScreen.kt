@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -66,7 +67,7 @@ fun AddContactScreen(onBack: () -> Unit, onOpenConversation: (Int) -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(online.xiaoxi.chathub.theme.WxBackground)) {
+    Column(Modifier.fillMaxSize().background(online.xiaoxi.chathub.theme.WxBackground).statusBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
