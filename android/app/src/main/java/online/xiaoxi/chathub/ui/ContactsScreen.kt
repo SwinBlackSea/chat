@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,8 @@ import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ModelDto
 import online.xiaoxi.chathub.data.UiCache
+import online.xiaoxi.chathub.data.WsHub
+import online.xiaoxi.chathub.theme.WxGreen
 import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
@@ -48,6 +51,7 @@ fun ContactsScreen(
 ) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
+    val onlineUsers by WsHub.onlineUsers.collectAsState()
     var humans by remember { mutableStateOf<List<ConversationDto>>(emptyList()) }
     var groups by remember { mutableStateOf<List<Pair<String, List<ModelDto>>>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -130,10 +134,19 @@ fun ContactsScreen(
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(conv.contactName, conv.avatarColor, size = 40.dp)
+                        Avatar(conv.contactName, conv.avatarColor, size = 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(conv.contactName, fontSize = 16.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(conv.contactName, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.width(6.dp))
+                                val online = conv.peerUserId in onlineUsers
+                                Text(
+                                    if (online) "在线" else "离线",
+                                    fontSize = 11.sp,
+                                    color = if (online) WxGreen else WxText3,
+                                )
+                            }
                             Text(conv.modelCode, fontSize = 12.sp, color = WxText3)
                         }
                         Icon(

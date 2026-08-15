@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,10 +46,11 @@ import kotlin.math.abs
 import online.xiaoxi.chathub.theme.WxText2
 
 private val AVATAR_PALETTE = listOf(
-    Color(0xFFDCE8E2) to Color(0xFF3E6B55),
-    Color(0xFFF3E3D3) to Color(0xFFA5713D),
-    Color(0xFFDDE5EC) to Color(0xFF4C657F),
-    Color(0xFFE7E0EC) to Color(0xFF71588A),
+    Color(0xFFE3EEF2) to Color(0xFF3A6B7C),
+    Color(0xFFF6E8DC) to Color(0xFF9A6B4F),
+    Color(0xFFE6E4F0) to Color(0xFF5E5487),
+    Color(0xFFDCEFE3) to Color(0xFF2F6B46),
+    Color(0xFFF4E4E8) to Color(0xFF96556A),
 )
 
 @Composable
@@ -64,7 +66,7 @@ fun Avatar(letter: String, colorHex: String?, size: Dp = 44.dp) {
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(size * 0.14f))
+            .clip(CircleShape)
             .background(bg),
         contentAlignment = Alignment.Center,
     ) {

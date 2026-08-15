@@ -126,7 +126,7 @@ fun SettingsScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .background(Color.White, RoundedCornerShape(10.dp)),
+                    .background(Color.White, RoundedCornerShape(12.dp)),
             ) {
                 Row(
                     Modifier
@@ -146,7 +146,7 @@ fun SettingsScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .background(Color.White, RoundedCornerShape(10.dp)),
+                    .background(Color.White, RoundedCornerShape(12.dp)),
             ) {
                 Row(
                     Modifier
@@ -182,7 +182,7 @@ fun SettingsScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .background(Color.White, RoundedCornerShape(10.dp)),
+                    .background(Color.White, RoundedCornerShape(12.dp)),
             ) {
                 Row(
                     Modifier

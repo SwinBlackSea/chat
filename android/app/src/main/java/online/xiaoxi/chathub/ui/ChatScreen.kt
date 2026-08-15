@@ -80,6 +80,7 @@ private data class UiMessage(
     val content: String,
     val error: String?,
     val senderUserId: String? = null,
+    val time: String? = null,
 )
 
 @Composable
@@ -106,7 +107,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             val msgDeferred = async { api.messages(conversationId) }
             conv = convDeferred.await()
             messages = msgDeferred.await().map {
-                UiMessage(it.id.toString(), it.role, it.content, it.error, it.senderUserId)
+                UiMessage(it.id.toString(), it.role, it.content, it.error, it.senderUserId, it.createdAt)
             }
         }
         screenError = null
@@ -301,8 +302,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
                 val mine = if (isHuman) {
@@ -310,6 +310,29 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 } else {
                     msg.role == "user"
                 }
+                // 时间分割线：第一条或与上一条间隔 ≥5 分钟
+                if (index == 0 || shouldShowTimeDivider(messages[index - 1], msg)) {
+                    Text(
+                        formatWhen(msg.time),
+                        fontSize = 11.sp,
+                        color = WxText3,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+                // 连续消息分组（同发送方相邻）
+                val prevMine = if (index > 0) {
+                    isMine(messages[index - 1], isHuman)
+                } else {
+                    null
+                }
+                val nextMine = if (index < messages.lastIndex) {
+                    isMine(messages[index + 1], isHuman)
+                } else {
+                    null
+                }
+                val firstInGroup = prevMine != mine
+                val lastInGroup = nextMine != mine
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = if (mine) {
@@ -318,9 +341,12 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         androidx.compose.foundation.layout.Arrangement.Start
                     },
                 ) {
-                    if (!mine) {
-                        Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 38.dp)
-                        Spacer(Modifier.width(8.dp))
+                    if (!mine && firstInGroup) {
+                        Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    if (!mine && !firstInGroup) {
+                        Spacer(Modifier.width(50.dp))
                     }
                     Column(
                         modifier = Modifier.widthIn(max = 290.dp),
@@ -330,9 +356,9 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             modifier = Modifier
                                 .background(
                                     if (mine) WxBubbleMe else Color.White,
-                                    RoundedCornerShape(8.dp),
+                                    bubbleShape(mine, firstInGroup, lastInGroup),
                                 )
-                                .padding(horizontal = 11.dp, vertical = 9.dp),
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
                         ) {
                             Column {
                                 if (msg.content.isNotEmpty()) {
@@ -350,30 +376,35 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 }
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(
-                                onClick = { clipboard.setText(AnnotatedString(msg.content)) },
-                                enabled = msg.content.isNotEmpty(),
-                            ) {
-                                Text("复制", color = WxText2, fontSize = 12.sp)
-                            }
-                            val lastUser = messages.take(index).lastOrNull { it.role == "user" }
-                            val isLastAssistant = msg.role == "assistant" &&
-                                index == messages.indexOfLast { it.role == "assistant" }
-                            if (isLastAssistant && lastUser != null && !streaming) {
+                        if (lastInGroup) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(
-                                    onClick = {
-                                        send(regenerate = true, regenerateContent = lastUser.content)
-                                    },
+                                    onClick = { clipboard.setText(AnnotatedString(msg.content)) },
+                                    enabled = msg.content.isNotEmpty(),
                                 ) {
-                                    Text("重新生成", color = WxText2, fontSize = 12.sp)
+                                    Text("复制", color = WxText2, fontSize = 12.sp)
+                                }
+                                val lastUser = messages.take(index).lastOrNull { it.role == "user" }
+                                val isLastAssistant = msg.role == "assistant" &&
+                                    index == messages.indexOfLast { it.role == "assistant" }
+                                if (isLastAssistant && lastUser != null && !streaming) {
+                                    TextButton(
+                                        onClick = {
+                                            send(regenerate = true, regenerateContent = lastUser.content)
+                                        },
+                                    ) {
+                                        Text("重新生成", color = WxText2, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }
                     }
-                    if (mine) {
-                        Spacer(Modifier.width(8.dp))
-                        Avatar("我", null, size = 38.dp)
+                    if (mine && firstInGroup) {
+                        Spacer(Modifier.width(10.dp))
+                        Avatar("我", null, size = 40.dp)
+                    }
+                    if (mine && !firstInGroup) {
+                        Spacer(Modifier.width(50.dp))
                     }
                 }
             }
@@ -418,7 +449,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(6.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.White,
                     unfocusedContainerColor = Color.White,
@@ -441,6 +472,43 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             ) {
                 Text("发送")
             }
+        }
+    }
+}
+
+private fun isMine(msg: UiMessage, isHuman: Boolean): Boolean =
+    if (isHuman) msg.senderUserId == Backend.userId else msg.role == "user"
+
+/** 时间分割线：第一条或与上一条消息间隔 ≥5 分钟。 */
+private fun shouldShowTimeDivider(prev: UiMessage?, curr: UiMessage): Boolean {
+    val prevTime = prev?.time ?: return true
+    val currTime = curr.time ?: return false
+    return try {
+        val a = java.time.LocalDateTime.parse(prevTime.substringBefore("+").substringBefore("Z"))
+        val b = java.time.LocalDateTime.parse(currTime.substringBefore("+").substringBefore("Z"))
+        java.time.Duration.between(a, b).toMinutes() >= 5
+    } catch (_: Exception) {
+        true
+    }
+}
+
+/** 微信式气泡圆角：尾巴角 4dp，其余 12dp；连续消息组内全圆角。 */
+private fun bubbleShape(mine: Boolean, firstInGroup: Boolean, lastInGroup: Boolean): RoundedCornerShape {
+    val small = 4.dp
+    val large = 12.dp
+    return if (mine) {
+        when {
+            firstInGroup && lastInGroup -> RoundedCornerShape(large, small, small, large)
+            firstInGroup -> RoundedCornerShape(large, small, large, large)
+            lastInGroup -> RoundedCornerShape(large, large, small, large)
+            else -> RoundedCornerShape(large)
+        }
+    } else {
+        when {
+            firstInGroup && lastInGroup -> RoundedCornerShape(small, large, large, small)
+            firstInGroup -> RoundedCornerShape(small, large, large, large)
+            lastInGroup -> RoundedCornerShape(large, large, large, small)
+            else -> RoundedCornerShape(large)
         }
     }
 }

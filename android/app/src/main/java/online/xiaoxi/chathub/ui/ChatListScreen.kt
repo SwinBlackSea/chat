@@ -148,13 +148,14 @@ fun ChatListScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Avatar(conv.contactName, conv.avatarColor)
+                        Avatar(conv.contactName, conv.avatarColor, size = 48.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     conv.contactName,
                                     fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
@@ -165,7 +166,7 @@ fun ChatListScreen(
                                     color = WxText3,
                                 )
                             }
-                            Spacer(Modifier.height(3.dp))
+                            Spacer(Modifier.height(5.dp))
                             Text(
                                 if (conv.id in activeConversations) {
                                     "正在回答…"
@@ -185,7 +186,7 @@ fun ChatListScreen(
                     }
                     if (index < items.size - 1) {
                         Spacer(
-                            Modifier.padding(start = 72.dp).height(1.dp).fillMaxWidth().background(WxLine),
+                            Modifier.padding(start = 76.dp).height(0.5.dp).fillMaxWidth().background(WxLine),
                         )
                     }
                 }
