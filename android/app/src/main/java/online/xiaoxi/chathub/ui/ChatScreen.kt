@@ -28,8 +28,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -367,6 +365,15 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
                             Spacer(Modifier.width(10.dp))
                         }
+                        // 已读/未读：自己的消息显示在气泡左侧小字（未读强调色、已读灰）
+                        if (mine && isHuman) {
+                            Text(
+                                if (msg.read) "已读" else "未读",
+                                color = if (msg.read) WxText2 else Accent,
+                                fontSize = 11.sp,
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
                         Box {
                             // 气泡
                             Box(
@@ -414,19 +421,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             }
                         }
                         if (mine) {
-                            // 已读回执：气泡右侧外部（微信式 ✓/✓✓），偏下贴近右下角
-                            if (isHuman) {
-                                Icon(
-                                    if (msg.read) Icons.Filled.DoneAll else Icons.Filled.Done,
-                                    contentDescription = if (msg.read) "已读" else "已送达",
-                                    tint = if (msg.read) WxText2 else WxText3,
-                                    modifier = Modifier
-                                        .padding(top = 14.dp)
-                                        .size(14.dp),
-                                )
-                                Spacer(Modifier.width(2.dp))
-                            }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(10.dp))
                             Avatar("我", null, size = 40.dp)
                         }
                     }
