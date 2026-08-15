@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,6 +77,8 @@ import online.xiaoxi.chathub.theme.WxLineStrong
 import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText
 import online.xiaoxi.chathub.theme.WxText2
+import online.xiaoxi.chathub.theme.Accent
+import online.xiaoxi.chathub.theme.FriendBubble
 import online.xiaoxi.chathub.theme.WxText3
 
 private data class UiMessage(
@@ -361,56 +364,60 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
                             Spacer(Modifier.width(10.dp))
                         }
-                        Box(
-                            modifier = Modifier
-                                .widthIn(max = 250.dp)
-                                .background(
-                                    if (mine) WxBubbleMe else Color.White,
-                                    bubbleShape(mine),
-                                )
-                                .padding(horizontal = 12.dp, vertical = 9.dp),
-                        ) {
-                            Column(
-                                horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+                        Box {
+                            // 气泡
+                            Box(
+                                modifier = Modifier
+                                    .widthIn(max = 250.dp)
+                                    .background(
+                                        if (mine) WxBubbleMe else FriendBubble,
+                                        bubbleShape(mine),
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
                             ) {
-                                if (msg.content.isNotEmpty()) {
-                                    MessageContent(msg.content, WxText)
+                                Column {
+                                    if (msg.content.isNotEmpty()) {
+                                        MessageContent(msg.content, WxText)
+                                    }
+                                    if (msg.error != null) {
+                                        Text(
+                                            "[出错] ${msg.error.substringAfter(": ", msg.error)}",
+                                            color = WxRed,
+                                            fontSize = 12.sp,
+                                        )
+                                    }
+                                    if (msg.content.isEmpty() && msg.error == null) {
+                                        Text("…", color = WxText3, fontSize = 14.sp)
+                                    }
                                 }
-                                if (msg.error != null) {
-                                    Text(
-                                        "[出错] ${msg.error.substringAfter(": ", msg.error)}",
-                                        color = WxRed,
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                                if (msg.content.isEmpty() && msg.error == null) {
-                                    Text("…", color = WxText3, fontSize = 14.sp)
-                                }
-                                // 已读/未读状态收进气泡内（不占额外行，保证相邻气泡间距一致）
-                                if (mine && isHuman) {
-                                    Text(
-                                        if (msg.read) "已读" else "未读",
-                                        color = if (msg.read) WxGreen else WxText3,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(top = 4.dp),
-                                    )
-                                }
-                                // 重新生成收进气泡内（bot 最后一条回答）
-                                val lastUser = messages.take(index).lastOrNull { it.role == "user" }
-                                val isLastAssistant = msg.role == "assistant" &&
-                                    index == messages.indexOfLast { it.role == "assistant" }
-                                if (isLastAssistant && lastUser != null && !streaming) {
-                                    Text(
-                                        "重新生成",
-                                        color = WxText2,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier
-                                            .padding(top = 4.dp)
-                                            .clickable {
-                                                send(regenerate = true, regenerateContent = lastUser.content)
-                                            },
-                                    )
-                                }
+                            }
+                            // 已读/未读：贴在气泡外右下角（不占布局空间，间距不受影响）
+                            if (mine && isHuman) {
+                                Text(
+                                    if (msg.read) "已读" else "未读",
+                                    color = if (msg.read) WxText3 else Accent,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = 6.dp, y = 0.dp),
+                                )
+                            }
+                            // 重新生成：贴在气泡外左下角（bot 最后一条回答）
+                            val lastUser = messages.take(index).lastOrNull { it.role == "user" }
+                            val isLastAssistant = msg.role == "assistant" &&
+                                index == messages.indexOfLast { it.role == "assistant" }
+                            if (isLastAssistant && lastUser != null && !streaming) {
+                                Text(
+                                    "重新生成",
+                                    color = WxText2,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .offset(x = (-6).dp, y = 0.dp)
+                                        .clickable {
+                                            send(regenerate = true, regenerateContent = lastUser.content)
+                                        },
+                                )
                             }
                         }
                         if (mine) {
