@@ -47,7 +47,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlin.math.abs
 import online.xiaoxi.chathub.data.AvatarLoader
 import online.xiaoxi.chathub.data.Backend
@@ -388,14 +390,21 @@ fun MessageContent(text: String, textColor: Color) {
     }
 }
 
+/** 后端时间一律为 UTC（naive 字符串按 UTC 解析），展示统一转北京时间（Asia/Shanghai）。 */
+private val SHANGHAI: ZoneId = ZoneId.of("Asia/Shanghai")
+
 fun formatWhen(iso: String?): String {
     if (iso == null) return ""
     return try {
-        val date = iso.substring(0, 10)
-        if (date == LocalDate.now().toString()) {
-            iso.substring(11, 16)
+        // 兼容带时区后缀（Z/+08:00）与 naive（视为 UTC）两种格式
+        val hasOffset = iso.endsWith("Z") || iso.substring(10).any { it == '+' || it == '-' }
+        val utc = if (hasOffset) OffsetDateTime.parse(iso) else OffsetDateTime.parse(iso + "Z")
+        val local = utc.atZoneSameInstant(SHANGHAI)
+        val today = ZonedDateTime.now(SHANGHAI).toLocalDate()
+        if (local.toLocalDate() == today) {
+            "%02d:%02d".format(local.hour, local.minute)
         } else {
-            date.substring(5).replace('-', '/')
+            "%02d/%02d".format(local.monthValue, local.dayOfMonth)
         }
     } catch (_: Exception) {
         ""
