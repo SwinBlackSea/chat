@@ -81,6 +81,7 @@ fun AppRoot(store: SettingsStore) {
                 onAddContact = { nav.navigate("addcontact") },
                 onOpenProviders = { nav.navigate("providers") },
                 onOpenSettings = { nav.navigate("settings") },
+                onOpenInfo = { id -> nav.navigate("info/$id") },
                 settingsStore = store,
             )
         }

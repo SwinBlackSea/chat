@@ -1,6 +1,7 @@
 package online.xiaoxi.chathub.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +55,7 @@ private val AVATAR_PALETTE = listOf(
 )
 
 @Composable
-fun Avatar(letter: String, colorHex: String?, size: Dp = 44.dp) {
+fun Avatar(letter: String, colorHex: String?, size: Dp = 44.dp, onClick: (() -> Unit)? = null) {
     val (bg, fg) = remember(letter, colorHex) {
         val parsed = colorHex?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)
         if (parsed != null) {
@@ -67,7 +68,8 @@ fun Avatar(letter: String, colorHex: String?, size: Dp = 44.dp) {
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
-            .background(bg),
+            .background(bg)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Text(

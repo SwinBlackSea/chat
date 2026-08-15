@@ -321,9 +321,9 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 )
                 Text(
                     when {
-                        isHuman && typingByPeer -> "对方正在输入…"
+                        typingByPeer -> "对方正在输入…"
                         streaming -> "对方正在输入…"
-                        isHuman -> conv?.modelCode.orEmpty()
+                        isHuman -> ""  // 人人会话不显示副标题（避免与标题重复）
                         else -> conv?.modelCode.orEmpty()
                     },
                     fontSize = 11.sp,
@@ -376,7 +376,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     // 每条消息独立：头像垂直居中于气泡，间隔均匀（微信 A-B-A 一致）
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!mine) {
-                            Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
+                            Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp, onClick = onInfo)
                             Spacer(Modifier.width(10.dp))
                         }
                         // 已读/未读：自己的消息显示在气泡左侧小字（未读强调色、已读灰）

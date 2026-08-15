@@ -33,6 +33,7 @@ fun MainScreen(
     onAddContact: () -> Unit,
     onOpenProviders: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenInfo: (Int) -> Unit = {},
     settingsStore: SettingsStore,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -72,6 +73,7 @@ fun MainScreen(
             ChatListScreen(
                 onOpenConversation,
                 onAddContact,
+                onOpenInfo = onOpenInfo,
                 visible = tab == 0,
                 Modifier.zIndex(if (tab == 0) 1f else 0f),
             )

@@ -67,6 +67,7 @@ import online.xiaoxi.chathub.theme.WxText3
 fun ChatListScreen(
     onOpen: (Int) -> Unit,
     onAddContact: () -> Unit,
+    onOpenInfo: (Int) -> Unit = {},
     visible: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
@@ -189,7 +190,7 @@ fun ChatListScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box {
-                            Avatar(conv.contactName, conv.avatarColor, size = 48.dp)
+                            Avatar(conv.contactName, conv.avatarColor, size = 48.dp, onClick = { onOpenInfo(conv.id) })
                             // 微信式未读红点（数字角标，头像右上角）
                             if (conv.unreadCount > 0) {
                                 Badge(
