@@ -2,6 +2,17 @@ package online.xiaoxi.chathub.data
 
 import org.json.JSONObject
 
+/** 聊天窗口单条消息的 UI 模型（key 为 h-/a-/u- 前缀时为本地乐观临时 id）。 */
+data class UiMessage(
+    val key: String,
+    val role: String,
+    val content: String,
+    val error: String?,
+    val senderUserId: String? = null,
+    val time: String? = null,
+    val read: Boolean = false,
+)
+
 data class ProviderDto(
     val id: Int,
     val name: String,

@@ -13,4 +13,7 @@ object UiCache {
 
     @Volatile
     var providers: List<ProviderDto>? = null
+
+    /** 各会话消息缓存（按 conversationId）：退出重进聊天页时先渲染缓存（首帧即定位底部，无加载抖动）。 */
+    val messages = HashMap<Int, List<UiMessage>>()
 }

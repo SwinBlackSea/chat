@@ -74,6 +74,8 @@ import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.ChatEvent
 import online.xiaoxi.chathub.data.ChatGenerationTracker
 import online.xiaoxi.chathub.data.ConversationDto
+import online.xiaoxi.chathub.data.UiCache
+import online.xiaoxi.chathub.data.UiMessage
 import online.xiaoxi.chathub.data.WsEvent
 import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.theme.WxBubbleMe
@@ -87,16 +89,6 @@ import online.xiaoxi.chathub.theme.Accent
 import online.xiaoxi.chathub.theme.FriendBubble
 import online.xiaoxi.chathub.theme.WxText3
 
-private data class UiMessage(
-    val key: String,
-    val role: String,
-    val content: String,
-    val error: String?,
-    val senderUserId: String? = null,
-    val time: String? = null,
-    val read: Boolean = false,
-)
-
 @Composable
 @kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
@@ -107,12 +99,16 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     val activeConversations by ChatGenerationTracker.activeConversations.collectAsState()
     val streaming = conversationId in activeConversations
     var conv by remember { mutableStateOf<ConversationDto?>(null) }
-    var messages by remember { mutableStateOf<List<UiMessage>>(emptyList()) }
+    // 消息初始用缓存（退出重进时瞬时渲染，LazyColumn 首帧即定位底部，无加载抖动）
+    val cachedMessages = remember { UiCache.messages[conversationId] ?: emptyList() }
+    var messages by remember { mutableStateOf(cachedMessages) }
     var input by rememberSaveable { mutableStateOf("") }
     var screenError by remember { mutableStateOf<String?>(null) }
     var typingByPeer by remember { mutableStateOf(false) }
     var remoteLoaded by remember { mutableStateOf(false) }
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (cachedMessages.size - 1).coerceAtLeast(0),
+    )
 
     val isHuman = conv?.isHuman == true
 
@@ -138,8 +134,17 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     Triple(m.role, m.content, m.senderUserId) !in remoteSignature
             }
             messages = remote + optimistic
+            UiCache.messages[conversationId] = messages
+            if (!remoteLoaded) {
+                // 首次定位：与数据填充同帧（非挂起 requestScrollToItem 立即设置滚动目标），
+                // 消除"进页先闪现顶部/空白再滚到底"的抖动；不受并发刷新取消影响。
+                // 有缓存时 LazyColumn 首帧已在底部（initialFirstVisibleItemIndex），此分支只兜底无缓存场景
+                remoteLoaded = true
+                if (messages.isNotEmpty()) {
+                    listState.requestScrollToItem(messages.size - 1)
+                }
+            }
         }
-        remoteLoaded = true // 服务端数据首次就绪标记（触发首次定位，独立于刷新协程生命周期）
         screenError = null
     }
 
@@ -213,8 +218,9 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 }
                 is WsEvent.Read -> {
                     // 对方已读回执：本地即时更新"自己发出去的消息"的已读状态
-                    // （不整表 reload，避免重排抖动）。senderUserId 必须是自己——
-                    // 之前误用 event.from 匹配导致永远不更新（已读回执不达的根因）
+                    // （senderUserId 必须是自己——之前误用 event.from 匹配导致永远不更新）。
+                    // 若消息仍是乐观 key（Ack 未到，key 非数字），本地更新跳过，
+                    // 用后台 reload 校准兜底（服务端 read 字段已计算，重拉即显示已读）
                     if (event.conversationId == conversationId) {
                         mainHandler.post {
                             messages = messages.map {
@@ -225,6 +231,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                     it
                                 }
                             }
+                            reloadAsync()
                         }
                     }
                 }
