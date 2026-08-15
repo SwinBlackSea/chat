@@ -370,12 +370,12 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         Spacer(Modifier.width(50.dp))
                     }
                     Column(
-                        modifier = Modifier.widthIn(max = 290.dp),
+                        modifier = Modifier.widthIn(max = 250.dp),
                         horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
                     ) {
                         Box(
                             modifier = Modifier
-                                .widthIn(max = 290.dp)
+                                .widthIn(max = 250.dp)
                                 .background(
                                     if (mine) WxBubbleMe else Color.White,
                                     bubbleShape(mine, firstInGroup, lastInGroup),
