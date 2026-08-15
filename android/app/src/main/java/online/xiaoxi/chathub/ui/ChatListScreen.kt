@@ -39,6 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.ConversationDto
@@ -83,9 +86,18 @@ fun ChatListScreen(
         }
     }
     LaunchedEffect(Unit) { load() }
-    // 切换回本 Tab 时静默刷新（不阻塞显示缓存）
+    // 切回本 Tab 时静默刷新（不阻塞显示缓存）
     LaunchedEffect(visible) {
         if (visible && loaded) load()
+    }
+    // App 回到前台时刷新（ws 断线期间错过的消息在此补齐）
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && loaded) load()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(activeConversations) {
         if (loaded) load()
