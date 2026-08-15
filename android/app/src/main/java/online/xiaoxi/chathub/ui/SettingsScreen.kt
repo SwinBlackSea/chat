@@ -331,6 +331,44 @@ fun SettingsScreen(onAddProvider: () -> Unit, settingsStore: SettingsStore) {
         )
     }
 
+    if (editingServer) {
+        var draftUrl by remember { mutableStateOf(Backend.baseUrl) }
+        AlertDialog(
+            onDismissRequest = { editingServer = false },
+            title = { Text("后端地址") },
+            text = {
+                OutlinedTextField(
+                    value = draftUrl,
+                    onValueChange = { draftUrl = it },
+                    label = { Text("http(s)://服务器地址") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val candidate = normalizeServerUrl(draftUrl)
+                    if (candidate == null) return@TextButton
+                    editingServer = false
+                    scope.launch {
+                        try {
+                            if (ApiClient(candidate).health()) {
+                                Backend.baseUrl = candidate
+                                settingsStore.setServerUrl(candidate)
+                                WsHub.restart()
+                                snackbar.showSnackbar("后端地址已更新")
+                            } else {
+                                snackbar.showSnackbar("连接失败，请检查地址")
+                            }
+                        } catch (e: Exception) {
+                            snackbar.showSnackbar("连接失败：${e.message}")
+                        }
+                    }
+                }) { Text("保存", color = WxGreen) }
+            },
+            dismissButton = { TextButton(onClick = { editingServer = false }) { Text("取消") } },
+        )
+    }
+
     if (editingIdentity) {
         var draftUserId by remember { mutableStateOf(storeUserId) }
         var draftName by remember { mutableStateOf(storeDisplayName) }
