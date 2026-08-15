@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -52,6 +52,7 @@ def conversation_out(
             model_code=peer.user_id if peer else "",
             provider_name="",
             avatar_color=peer.avatar_color if peer else None,
+            avatar=f"/avatars/{peer.avatar}" if peer and peer.avatar else None,
             context_length=None,
             system_prompt=None,
             peer_user_id=peer.user_id if peer else None,
@@ -81,7 +82,12 @@ def conversation_out(
 async def _unread_counts(
     session: AsyncSession, conversation_ids: list[int], me_user_id: str | None
 ) -> dict[int, int]:
-    """批量计算每个会话的未读数（对方发送且晚于已读进度的消息）。"""
+    """批量计算每个会话的未读数（对方/AI 发送且晚于已读进度的消息）。
+
+    bot 会话：AI 回复的 sender_user_id 为 NULL，只有 role='assistant' 的消息算未读
+    （用户自己发的消息 sender 也为 NULL，必须排除）。
+    human 会话：对方发送的消息（sender != 我）。
+    """
     if not conversation_ids or not me_user_id:
         return {cid: 0 for cid in conversation_ids}
     stmt = (
@@ -94,7 +100,9 @@ async def _unread_counts(
         .where(
             Message.conversation_id.in_(conversation_ids),
             or_(
-                Message.sender_user_id.is_(None),
+                # AI 回复（无发送者，bot 会话）；用户自己的 bot 消息同为 NULL 发送者，按 role 排除
+                and_(Message.sender_user_id.is_(None), Message.role == "assistant"),
+                # 对方消息（human 会话）
                 Message.sender_user_id != me_user_id,
             ),
             or_(
