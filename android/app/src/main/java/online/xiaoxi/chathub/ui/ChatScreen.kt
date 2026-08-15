@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -297,10 +298,14 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     }
                     is ChatEvent.Done -> {
                         ChatGenerationTracker.finish(conversationId)
+                        // 推进已读不依赖本页面作用域：AI 回复是用户自己触发的，
+                        // 中途退出后回复完成也必须推进已读，否则列表重新出现未读红点
+                        GlobalScope.launch {
+                            runCatching { api.markRead(conversationId) }
+                        }
                         scope.launch {
                             try {
                                 reload()
-                                api.markRead(conversationId) // 回复已完成且在看 → 推进已读进度
                             } catch (e: Exception) {
                                 screenError = "刷新失败：${e.message}"
                             }
@@ -311,10 +316,12 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                             if (it.key == assistantKey) it.copy(error = event.message) else it
                         }
                         ChatGenerationTracker.finish(conversationId)
+                        GlobalScope.launch {
+                            runCatching { api.markRead(conversationId) }
+                        }
                         scope.launch {
                             try {
                                 reload()
-                                api.markRead(conversationId)
                             } catch (e: Exception) {
                                 screenError = "刷新失败：${e.message}"
                             }
