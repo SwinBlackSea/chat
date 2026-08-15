@@ -329,6 +329,7 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 .fillMaxWidth()
                 .imePadding(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
                 val mine = if (isHuman) {
@@ -359,25 +360,20 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 }
                 val firstInGroup = prevMine != mine
                 val lastInGroup = nextMine != mine
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (mine) {
-                        androidx.compose.foundation.layout.Arrangement.End
-                    } else {
-                        androidx.compose.foundation.layout.Arrangement.Start
-                    },
+                    horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
                 ) {
-                    if (!mine && firstInGroup) {
-                        Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
-                        Spacer(Modifier.width(10.dp))
-                    }
-                    if (!mine && !firstInGroup) {
-                        Spacer(Modifier.width(50.dp))
-                    }
-                    Column(
-                        modifier = Modifier.widthIn(max = 250.dp),
-                        horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
-                    ) {
+                    // 头像垂直居中于气泡（微信式），连续消息组内用占位保持对齐
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!mine) {
+                            if (firstInGroup) {
+                                Avatar(conv?.contactName ?: "A", conv?.avatarColor, size = 40.dp)
+                            } else {
+                                Spacer(Modifier.width(40.dp))
+                            }
+                            Spacer(Modifier.width(10.dp))
+                        }
                         Box(
                             modifier = Modifier
                                 .widthIn(max = 250.dp)
@@ -403,35 +399,43 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                                 }
                             }
                         }
-                        if (lastInGroup) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(
-                                    onClick = { clipboard.setText(AnnotatedString(msg.content)) },
-                                    enabled = msg.content.isNotEmpty(),
-                                ) {
-                                    Text("复制", color = WxText2, fontSize = 12.sp)
-                                }
-                                val lastUser = messages.take(index).lastOrNull { it.role == "user" }
-                                val isLastAssistant = msg.role == "assistant" &&
-                                    index == messages.indexOfLast { it.role == "assistant" }
-                                if (isLastAssistant && lastUser != null && !streaming) {
-                                    TextButton(
-                                        onClick = {
-                                            send(regenerate = true, regenerateContent = lastUser.content)
-                                        },
-                                    ) {
-                                        Text("重新生成", color = WxText2, fontSize = 12.sp)
-                                    }
-                                }
+                        if (mine) {
+                            Spacer(Modifier.width(10.dp))
+                            if (firstInGroup) {
+                                Avatar("我", null, size = 40.dp)
+                            } else {
+                                Spacer(Modifier.width(40.dp))
                             }
                         }
                     }
-                    if (mine && firstInGroup) {
-                        Spacer(Modifier.width(10.dp))
-                        Avatar("我", null, size = 40.dp)
-                    }
-                    if (mine && !firstInGroup) {
-                        Spacer(Modifier.width(50.dp))
+                    if (lastInGroup) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = if (mine) {
+                                androidx.compose.foundation.layout.Arrangement.End
+                            } else {
+                                androidx.compose.foundation.layout.Arrangement.Start
+                            },
+                        ) {
+                            TextButton(
+                                onClick = { clipboard.setText(AnnotatedString(msg.content)) },
+                                enabled = msg.content.isNotEmpty(),
+                            ) {
+                                Text("复制", color = WxText2, fontSize = 12.sp)
+                            }
+                            val lastUser = messages.take(index).lastOrNull { it.role == "user" }
+                            val isLastAssistant = msg.role == "assistant" &&
+                                index == messages.indexOfLast { it.role == "assistant" }
+                            if (isLastAssistant && lastUser != null && !streaming) {
+                                TextButton(
+                                    onClick = {
+                                        send(regenerate = true, regenerateContent = lastUser.content)
+                                    },
+                                ) {
+                                    Text("重新生成", color = WxText2, fontSize = 12.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
