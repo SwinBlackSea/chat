@@ -30,6 +30,7 @@ import online.xiaoxi.chathub.data.SettingsStore
 fun MainScreen(
     onOpenConversation: (Int) -> Unit,
     onAddProvider: () -> Unit,
+    onAddContact: () -> Unit,
     settingsStore: SettingsStore,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -61,7 +62,7 @@ fun MainScreen(
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                0 -> ChatListScreen(onOpenConversation)
+                0 -> ChatListScreen(onOpenConversation, onAddContact)
                 1 -> ContactsScreen(onOpenConversation)
                 else -> SettingsScreen(onAddProvider, settingsStore)
             }

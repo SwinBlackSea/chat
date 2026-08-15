@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -56,9 +57,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
+import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.ChatEvent
 import online.xiaoxi.chathub.data.ChatGenerationTracker
 import online.xiaoxi.chathub.data.ConversationDto
+import online.xiaoxi.chathub.data.WsEvent
+import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.theme.WxBubbleMe
 import online.xiaoxi.chathub.theme.WxChatBackground
 import online.xiaoxi.chathub.theme.WxGreen
@@ -73,6 +77,7 @@ private data class UiMessage(
     val role: String,
     val content: String,
     val error: String?,
+    val senderUserId: String? = null,
 )
 
 @Composable
@@ -87,14 +92,62 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
     var messages by remember { mutableStateOf<List<UiMessage>>(emptyList()) }
     var input by rememberSaveable { mutableStateOf("") }
     var screenError by remember { mutableStateOf<String?>(null) }
+    var typingByPeer by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+
+    val isHuman = conv?.isHuman == true
 
     suspend fun reload() {
         conv = api.conversations().firstOrNull { it.id == conversationId }
         messages = api.messages(conversationId).map {
-            UiMessage(it.id.toString(), it.role, it.content, it.error)
+            UiMessage(it.id.toString(), it.role, it.content, it.error, it.senderUserId)
         }
         screenError = null
+    }
+
+    // 人人会话：实时事件（对方消息/回执/typing/online）驱动刷新与提示
+    DisposableEffect(conversationId) {
+        val listener: (WsEvent) -> Unit = { event ->
+            when (event) {
+                is WsEvent.Message -> {
+                    if (event.conversationId == conversationId) {
+                        mainHandler.post {
+                            scope.launch {
+                                try {
+                                    reload()
+                                } catch (e: Exception) {
+                                    screenError = "刷新失败：${e.message}"
+                                }
+                            }
+                        }
+                    }
+                }
+                is WsEvent.Ack -> {
+                    if (event.conversationId == conversationId) {
+                        mainHandler.post {
+                            scope.launch {
+                                try {
+                                    reload()
+                                } catch (e: Exception) {
+                                    screenError = "刷新失败：${e.message}"
+                                }
+                            }
+                        }
+                    }
+                }
+                is WsEvent.Typing -> {
+                    if (event.from == conv?.peerUserId) {
+                        mainHandler.post {
+                            typingByPeer = true
+                            mainHandler.postDelayed({ typingByPeer = false }, 2500)
+                        }
+                    }
+                }
+                else -> Unit
+            }
+        }
+        WsHub.addListener(listener)
+        onDispose { WsHub.removeListener(listener) }
     }
 
     LaunchedEffect(conversationId) {
@@ -121,6 +174,23 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 screenError = "刷新失败：${e.message}"
             }
         }
+    }
+
+    fun sendHuman() {
+        val text = input.trim()
+        if (text.isEmpty()) return
+        val peer = conv?.peerUserId
+        if (peer.isNullOrEmpty()) return
+        if (!WsHub.connected.value) {
+            screenError = "实时通道未连接，请检查网络后重试"
+            return
+        }
+        input = ""
+        val key = "h-${System.currentTimeMillis()}"
+        messages = messages + UiMessage(key, "user", text, null, Backend.userId)
+        screenError = null
+        // 服务端落库后回 ack 事件，触发 reload 换成真实消息
+        WsHub.sendMessage(peer, text)
     }
 
     fun send(regenerate: Boolean = false, regenerateContent: String? = null) {
@@ -197,7 +267,12 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    if (streaming) "对方正在输入…" else conv?.modelCode.orEmpty(),
+                    when {
+                        isHuman && typingByPeer -> "对方正在输入…"
+                        streaming -> "对方正在输入…"
+                        isHuman -> conv?.modelCode.orEmpty()
+                        else -> conv?.modelCode.orEmpty()
+                    },
                     fontSize = 11.sp,
                     color = WxText2,
                 )
@@ -223,7 +298,11 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(messages, key = { _, message -> message.key }) { index, msg ->
-                val mine = msg.role == "user"
+                val mine = if (isHuman) {
+                    msg.senderUserId == Backend.userId
+                } else {
+                    msg.role == "user"
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = if (mine) {
@@ -341,12 +420,12 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                 ),
                 placeholder = { Text("输入消息", color = WxText3) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send() }),
+                keyboardActions = KeyboardActions(onSend = { if (isHuman) sendHuman() else send() }),
                 maxLines = 4,
             )
             Spacer(Modifier.width(8.dp))
             Button(
-                onClick = { send() },
+                onClick = { if (isHuman) sendHuman() else send() },
                 enabled = input.isNotBlank() && !streaming,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = WxGreen,

@@ -118,34 +118,36 @@ fun ContactInfoScreen(conversationId: Int, onBack: () -> Unit, onChat: () -> Uni
                 Text("发消息", fontSize = 16.sp)
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 14.dp)
-                    .background(Color.White, RoundedCornerShape(10.dp)),
-            ) {
-                InfoCell("服务商", current.providerName)
-                Spacer(Modifier.padding(start = 16.dp).height(1.dp).fillMaxWidth().background(WxLine))
-                Row(
+            if (!current.isHuman) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showPersona = true }
-                        .padding(horizontal = 16.dp, vertical = 15.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 14.dp)
+                        .background(Color.White, RoundedCornerShape(10.dp)),
                 ) {
-                    Text("人设（system prompt）", fontSize = 16.sp)
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        if (current.systemPrompt.isNullOrBlank()) "未设置" else "已设置",
-                        fontSize = 14.sp,
-                        color = WxText3,
-                    )
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = WxText3,
-                    )
+                    InfoCell("服务商", current.providerName)
+                    Spacer(Modifier.padding(start = 16.dp).height(1.dp).fillMaxWidth().background(WxLine))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPersona = true }
+                            .padding(horizontal = 16.dp, vertical = 15.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("人设（system prompt）", fontSize = 16.sp)
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            if (current.systemPrompt.isNullOrBlank()) "未设置" else "已设置",
+                            fontSize = 14.sp,
+                            color = WxText3,
+                        )
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = WxText3,
+                        )
+                    }
                 }
             }
 

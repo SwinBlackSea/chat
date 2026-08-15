@@ -1,5 +1,7 @@
 package online.xiaoxi.chathub.ui
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -14,11 +16,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,15 +41,18 @@ import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ChatGenerationTracker
+import online.xiaoxi.chathub.data.WsEvent
+import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.theme.WxLine
 import online.xiaoxi.chathub.theme.WxRed
 import online.xiaoxi.chathub.theme.WxText2
 import online.xiaoxi.chathub.theme.WxText3
 
 @Composable
-fun ChatListScreen(onOpen: (Int) -> Unit) {
+fun ChatListScreen(onOpen: (Int) -> Unit, onAddContact: () -> Unit) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val activeConversations by ChatGenerationTracker.activeConversations.collectAsState()
     var items by remember { mutableStateOf<List<ConversationDto>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -67,6 +74,16 @@ fun ChatListScreen(onOpen: (Int) -> Unit) {
     LaunchedEffect(activeConversations) {
         if (loaded) load()
     }
+    // 实时通道新消息/回执到达 → 刷新列表
+    DisposableEffect(Unit) {
+        val listener: (WsEvent) -> Unit = { event ->
+            if (event is WsEvent.Message || event is WsEvent.Ack) {
+                mainHandler.post { load() }
+            }
+        }
+        WsHub.addListener(listener)
+        onDispose { WsHub.removeListener(listener) }
+    }
 
     Column(Modifier.fillMaxSize().background(Color.White)) {
         Row(
@@ -74,6 +91,7 @@ fun ChatListScreen(onOpen: (Int) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("ChatHub", fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(onClick = onAddContact) { Icon(Icons.Filled.Add, contentDescription = "添加联系人") }
             IconButton(onClick = { load() }) { Icon(Icons.Filled.Refresh, contentDescription = "刷新") }
         }
         when {
@@ -84,7 +102,7 @@ fun ChatListScreen(onOpen: (Int) -> Unit) {
                 modifier = Modifier.padding(16.dp),
             )
             loaded && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("还没有对话，去通讯录选一位联系人吧", color = WxText2, fontSize = 14.sp)
+                Text("还没有对话，去通讯录选一位联系人，或点右上角 + 加人", color = WxText2, fontSize = 14.sp)
             }
             else -> LazyColumn {
                 itemsIndexed(items) { index, conv ->

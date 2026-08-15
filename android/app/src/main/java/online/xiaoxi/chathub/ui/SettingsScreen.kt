@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.ModelDto
 import online.xiaoxi.chathub.data.ProviderDto
 import online.xiaoxi.chathub.data.SettingsStore
+import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.data.normalizeServerUrl
 import online.xiaoxi.chathub.theme.WxGreen
 import online.xiaoxi.chathub.theme.WxLine
@@ -70,6 +72,9 @@ fun SettingsScreen(onAddProvider: () -> Unit, settingsStore: SettingsStore) {
     var addingModelFor by remember { mutableStateOf<ProviderDto?>(null) }
     var editingModel by remember { mutableStateOf<ModelDto?>(null) }
     var editingServer by remember { mutableStateOf(false) }
+    var editingIdentity by remember { mutableStateOf(false) }
+    val storeUserId by settingsStore.userId.collectAsState(initial = "")
+    val storeDisplayName by settingsStore.displayName.collectAsState(initial = "")
 
     fun load() {
         scope.launch {
@@ -119,6 +124,42 @@ fun SettingsScreen(onAddProvider: () -> Unit, settingsStore: SettingsStore) {
                     Text("后端地址", fontSize = 16.sp)
                     Spacer(Modifier.weight(1f))
                     Text(Backend.baseUrl.removePrefix("https://"), fontSize = 13.sp, color = WxText2)
+                }
+            }
+
+            SectionLabel("我的身份")
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .background(Color.White, RoundedCornerShape(10.dp)),
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { editingIdentity = true }
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("user_id", fontSize = 16.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        storeUserId.ifEmpty { "未设置" },
+                        fontSize = 13.sp,
+                        color = if (storeUserId.isEmpty()) WxRed else WxText2,
+                    )
+                }
+                Spacer(Modifier.height(1.dp).fillMaxWidth().background(WxLine))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { editingIdentity = true }
+                        .padding(horizontal = 16.dp, vertical = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("显示名", fontSize = 16.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text(storeDisplayName.ifEmpty { "未设置" }, fontSize = 13.sp, color = WxText2)
                 }
             }
 
@@ -287,6 +328,53 @@ fun SettingsScreen(onAddProvider: () -> Unit, settingsStore: SettingsStore) {
                     editing = null
                 }
             },
+        )
+    }
+
+    if (editingIdentity) {
+        var draftUserId by remember { mutableStateOf(storeUserId) }
+        var draftName by remember { mutableStateOf(storeDisplayName) }
+        AlertDialog(
+            onDismissRequest = { editingIdentity = false },
+            title = { Text("我的身份") },
+            text = {
+                Column {
+                    Text("user_id 是「我是谁」的唯一标识，别人通过它添加你。", fontSize = 12.sp, color = WxText2)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = draftUserId,
+                        onValueChange = { draftUserId = it },
+                        label = { Text("user_id") },
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = draftName,
+                        onValueChange = { draftName = it },
+                        label = { Text("显示名") },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val uid = draftUserId.trim()
+                    if (uid.isEmpty()) return@TextButton
+                    editingIdentity = false
+                    scope.launch {
+                        try {
+                            api.registerUser(uid, draftName.trim().ifEmpty { uid })
+                            settingsStore.setIdentity(uid, draftName.trim().ifEmpty { uid })
+                            Backend.userId = uid
+                            WsHub.restart()
+                            snackbar.showSnackbar("身份已保存")
+                        } catch (e: Exception) {
+                            snackbar.showSnackbar("保存失败：${e.message}")
+                        }
+                    }
+                }) { Text("保存", color = WxGreen) }
+            },
+            dismissButton = { TextButton(onClick = { editingIdentity = false }) { Text("取消") } },
         )
     }
 
