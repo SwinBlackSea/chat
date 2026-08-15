@@ -284,7 +284,11 @@ async def mark_read(
 
 
 @router.get("/conversations/{conversation_id}/messages")
-async def list_messages(conversation_id: int, session: AsyncSession = Depends(get_session)):
+async def list_messages(
+    conversation_id: int,
+    session: AsyncSession = Depends(get_session),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+):
     conv = await session.get(Conversation, conversation_id)
     if conv is None:
         raise HTTPException(status_code=404, detail="会话不存在")
@@ -299,7 +303,35 @@ async def list_messages(conversation_id: int, session: AsyncSession = Depends(ge
         .scalars()
         .all()
     )
-    return [MessageOut.model_validate(m) for m in rows]
+    # 已读状态（human 会话）：对方已读进度 >= 消息 id 即已读
+    peer_last_read: int | None = None
+    if conv.kind == "human":
+        me = await get_me(session, x_user_id)
+        peer_id = None
+        if me is not None:
+            peer_id = conv.peer_a_id if conv.peer_a_id != me.id else conv.peer_b_id
+        if peer_id is not None:
+            peer = await session.get(User, peer_id)
+            if peer is not None:
+                read_row = (
+                    await session.execute(
+                        select(ConversationRead).where(
+                            ConversationRead.conversation_id == conversation_id,
+                            ConversationRead.user_id == peer.user_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if read_row is not None:
+                    peer_last_read = read_row.last_read_msg_id
+    out = []
+    for m in rows:
+        dto = MessageOut.model_validate(m)
+        dto.read = (
+            peer_last_read is not None
+            and m.id <= peer_last_read
+        )
+        out.append(dto)
+    return out
 
 
 @router.put("/conversations/{conversation_id}")

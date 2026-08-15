@@ -133,6 +133,7 @@ class MessageOut(BaseModel):
     sender_user_id: str | None = None
     error: str | None
     created_at: datetime
+    read: bool = False
 
 
 class ChatIn(BaseModel):
