@@ -26,8 +26,20 @@ def avatars_dir() -> Path:
     return Path(settings.db_path).parent / "avatars"
 
 
-def avatar_url(user: User) -> str | None:
-    return f"/avatars/{user.avatar}" if user.avatar else None
+def avatar_url(filename: str | None) -> str | None:
+    """头像 URL：/avatars/<file>?v=<文件修改时间>。
+
+    v 是文件 mtime（秒），换头像即新文件新 mtime → URL 必变，
+    客户端按 URL 的内存缓存/HTTP 缓存自动失效，避免显示旧头像。
+    """
+    if not filename:
+        return None
+    path = avatars_dir() / Path(filename).name
+    try:
+        version = int(path.stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/avatars/{filename}?v={version}"
 
 
 def user_out(user: User) -> UserOut:
@@ -36,7 +48,7 @@ def user_out(user: User) -> UserOut:
         user_id=user.user_id,
         display_name=user.display_name,
         avatar_color=user.avatar_color,
-        avatar=avatar_url(user),
+        avatar=avatar_url(user.avatar),
     )
 
 
@@ -156,4 +168,11 @@ async def upload_avatar(
             pass
     me.avatar = filename
     await session.commit()
+    # 通知我的全部 human 会话对方：头像已变（对方客户端刷新列表/聊天窗口/通讯录）
+    from ..services.human import human_peer_user_ids
+    from ..services.ws import manager
+
+    peers = await human_peer_user_ids(session, me)
+    for peer_id in peers:
+        await manager.send_to(peer_id, {"type": "avatar", "user_id": me.user_id})
     return user_out(me)

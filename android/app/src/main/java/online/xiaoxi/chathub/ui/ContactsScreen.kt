@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,11 +36,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.ConversationDto
 import online.xiaoxi.chathub.data.ModelDto
 import online.xiaoxi.chathub.data.UiCache
+import online.xiaoxi.chathub.data.WsEvent
 import online.xiaoxi.chathub.data.WsHub
 import online.xiaoxi.chathub.theme.OnlineGreen
 import online.xiaoxi.chathub.theme.WxRed
@@ -54,6 +58,7 @@ fun ContactsScreen(
 ) {
     val api = remember { ApiClient() }
     val scope = rememberCoroutineScope()
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val onlineUsers by WsHub.onlineUsers.collectAsState()
     var humans by remember { mutableStateOf<List<ConversationDto>>(emptyList()) }
     var groups by remember { mutableStateOf<List<Pair<String, List<ModelDto>>>>(emptyList()) }
@@ -86,6 +91,16 @@ fun ContactsScreen(
     // 切换回本 Tab 时静默刷新（不阻塞显示缓存）
     LaunchedEffect(visible) {
         if (visible && loaded) load()
+    }
+    // 实时通道：对方换头像/新消息 → 刷新（头像与会话列表同步更新）
+    DisposableEffect(Unit) {
+        val listener: (WsEvent) -> Unit = { event ->
+            if (event is WsEvent.Avatar || event is WsEvent.Message || event is WsEvent.Ack) {
+                mainHandler.post { load() }
+            }
+        }
+        WsHub.addListener(listener)
+        onDispose { WsHub.removeListener(listener) }
     }
 
     Column(

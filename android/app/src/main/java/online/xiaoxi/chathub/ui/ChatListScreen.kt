@@ -111,11 +111,12 @@ fun ChatListScreen(
     LaunchedEffect(activeConversations) {
         if (loaded) load()
     }
-    // 实时通道新消息/回执到达 → 刷新列表；ws 断线重连后服务端发 sync → 补齐离线期间错过的消息
+    // 实时通道新消息/回执/对方换头像 → 刷新列表；ws 断线重连后服务端发 sync → 补齐离线期间错过的消息
     DisposableEffect(Unit) {
         val listener: (WsEvent) -> Unit = { event ->
             when (event) {
-                is WsEvent.Message, is WsEvent.Ack, is WsEvent.Sync -> mainHandler.post { load() }
+                is WsEvent.Message, is WsEvent.Ack, is WsEvent.Sync, is WsEvent.Avatar ->
+                    mainHandler.post { load() }
                 else -> Unit
             }
         }

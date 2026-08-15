@@ -31,6 +31,8 @@ sealed class WsEvent {
         val conversationId: Int = 0,
         val lastReadMsgId: Int = 0,
     ) : WsEvent()
+    /** 会话对方换头像了（服务端广播），客户端刷新列表/聊天窗口以更新对方头像。 */
+    data class Avatar(val userId: String) : WsEvent()
     object Sync : WsEvent()
 }
 
@@ -137,6 +139,7 @@ object WsHub {
                     lastReadMsgId = json.optInt("last_read_msg_id"),
                 )
                 "sync" -> WsEvent.Sync
+                "avatar" -> WsEvent.Avatar(json.optString("user_id"))
                 else -> null
             }
             event?.let { e -> listeners.forEach { it(e) } }

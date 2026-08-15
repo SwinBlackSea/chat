@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import online.xiaoxi.chathub.data.ApiClient
+import online.xiaoxi.chathub.data.AvatarLoader
 import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.SettingsStore
 import online.xiaoxi.chathub.data.WsHub
@@ -100,6 +101,7 @@ fun ProfileScreen(
                     val path = api.uploadAvatar(bytes, mime)
                     if (path != null) {
                         Backend.myAvatar = path
+                        AvatarLoader.clearAll() // 兜底清内存缓存，防旧图残留
                         avatarMsg = "头像已更新"
                     } else {
                         avatarMsg = "上传失败"

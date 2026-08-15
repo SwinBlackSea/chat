@@ -150,8 +150,11 @@ REST（JSON，前缀 `/api`）：
 | GET | /api/conversations/{id}/messages | 历史消息（human 会话含 sender_user_id 与 read 已读状态） |
 | GET / POST | /api/users | 按 user_id 搜索（加人用）/ 注册自己的身份 |
 | GET / PUT | /api/me | 当前身份（由请求头 X-User-Id 指定） |
-| POST | /api/me/avatar | multipart 上传我的头像（JPG/PNG/WebP，≤5MB，魔数校验），存 data/avatars/，返回 avatar URL |
+| POST | /api/me/avatar | multipart 上传我的头像（JPG/PNG/WebP，≤5MB，魔数校验），存 data/avatars/，返回 avatar URL；成功后经 ws 广播 avatar 事件给全部 human 会话对方 |
 | GET | /avatars/{file} | 头像静态文件（FastAPI StaticFiles 挂载） |
+
+- 头像 URL 带版本参数：`/avatars/<file>?v=<文件 mtime 秒>`——换头像即新文件新 mtime，
+  URL 必变，客户端按 URL 的内存缓存自动失效（AvatarLoader LRU + 上传后 clearAll 兜底）。
 
 - 身份头：人人相关 REST 请求带 `X-User-Id: <user_id>`（MVP 无登录，服务端以此识别"我是谁"；
   ws 握手 query 同参）。
@@ -191,6 +194,7 @@ event: error   data: {"code": "bad_key", "message": "API Key 无效"}
 | 下行 | ack | `{"message_id":N,"conversation_id":N,"delivered":bool}` | 发送方确认（已送达/对方离线） |
 | 下行 | typing / read | `{"from":"..."}` / `{"from":"...","conversation_id":N,"last_read_msg_id":N}` | 转发事件 |
 | 下行 | online | `{"user_id":"...","online":bool}` | 会话对方上下线 |
+| 下行 | avatar | `{"user_id":"..."}` | 会话对方换了头像（广播给我全部 human 会话对方），客户端刷新列表/聊天窗口 |
 | 下行 | error | `{"code":"...","message":"..."}` | 请求非法 / 对方不存在 |
 
 - 连接管理（services/ws.py）：内存注册表 `user_id → 连接集合`（多端在线全送达），

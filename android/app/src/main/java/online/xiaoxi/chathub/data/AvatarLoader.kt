@@ -11,11 +11,13 @@ import okhttp3.Request
 
 /**
  * 头像图片加载：OkHttp 拉取 + 内存 LRU 缓存（按 URL）。
- * 头像体积小（≤5MB 且通常几百 KB），进程内缓存即可，不做磁盘缓存。
+ * 头像 URL 由服务端带 ?v=<mtime> 版本参数：换头像 → 新文件新 mtime → URL 必变，
+ * 缓存自动失效；上传成功后也可主动 clearAll() 兜底。不做磁盘缓存。
  */
 object AvatarLoader {
-    private val cache = object : LruCache<String, Bitmap>(64) {
-        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
+    // 上限 8MB（按字节计）；此前 64 是 KB 级上限，任何头像解码后都立即被驱逐，缓存形同虚设
+    private val cache = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
     private val http = OkHttpClient.Builder()
@@ -24,6 +26,11 @@ object AvatarLoader {
         .build()
 
     fun cached(url: String): Bitmap? = cache.get(url)
+
+    /** 清空内存缓存（换头像后调用，兜底防旧图残留）。 */
+    fun clearAll() {
+        cache.evictAll()
+    }
 
     /** 加载头像；失败返回 null（调用方回退字母头像）。 */
     suspend fun load(url: String): Bitmap? = withContext(Dispatchers.IO) {

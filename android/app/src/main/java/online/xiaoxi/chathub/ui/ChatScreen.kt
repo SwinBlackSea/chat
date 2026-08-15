@@ -195,6 +195,20 @@ fun ChatScreen(conversationId: Int, onBack: () -> Unit, onInfo: () -> Unit) {
                         }
                     }
                 }
+                is WsEvent.Avatar -> {
+                    // 对方换了头像：刷新会话拿到新头像 URL（URL 带 ?v= 版本，Avatar 自动重载）
+                    if (event.userId == conv?.peerUserId) {
+                        mainHandler.post {
+                            scope.launch {
+                                try {
+                                    reload()
+                                } catch (e: Exception) {
+                                    screenError = "刷新失败：${e.message}"
+                                }
+                            }
+                        }
+                    }
+                }
                 else -> Unit
             }
         }

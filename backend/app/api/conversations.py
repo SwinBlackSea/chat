@@ -3,6 +3,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..api.users import avatar_url
 from ..db import get_session
 from ..models import Conversation, ConversationRead, Message, Model, User
 from ..schemas import (
@@ -52,7 +53,7 @@ def conversation_out(
             model_code=peer.user_id if peer else "",
             provider_name="",
             avatar_color=peer.avatar_color if peer else None,
-            avatar=f"/avatars/{peer.avatar}" if peer and peer.avatar else None,
+            avatar=avatar_url(peer.avatar if peer else None),
             context_length=None,
             system_prompt=None,
             peer_user_id=peer.user_id if peer else None,

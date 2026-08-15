@@ -11,6 +11,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,6 +19,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.launch
+import online.xiaoxi.chathub.data.ApiClient
 import online.xiaoxi.chathub.data.Backend
 import online.xiaoxi.chathub.data.SettingsStore
 import online.xiaoxi.chathub.data.WsHub
@@ -51,12 +54,23 @@ class MainActivity : ComponentActivity() {
                             Backend.userId = userId
                             if (userId.isNotEmpty()) WsHub.start() else WsHub.stop()
                         }
-                        // App 回到前台时检查实时通道，未连接则自动重连
+                        // App 回到前台时检查实时通道，未连接则自动重连；
+                        // 同时拉取我的资料刷新头像（换头像可能发生在其他设备/后台期间）
                         val lifecycleOwner = LocalLifecycleOwner.current
+                        val appScope = rememberCoroutineScope()
                         DisposableEffect(lifecycleOwner) {
                             val observer = LifecycleEventObserver { _, event ->
-                                if (event == Lifecycle.Event.ON_RESUME && !WsHub.connected.value) {
-                                    WsHub.restart()
+                                if (event == Lifecycle.Event.ON_RESUME) {
+                                    if (!WsHub.connected.value) WsHub.restart()
+                                    if (Backend.userId.isNotEmpty()) {
+                                        appScope.launch {
+                                            try {
+                                                val me = ApiClient().me()
+                                                if (me.avatar != null) Backend.myAvatar = me.avatar
+                                            } catch (_: Exception) {
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             lifecycleOwner.lifecycle.addObserver(observer)
